@@ -1,0 +1,83 @@
+name: Test and publish Clipper
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run tests
+        run: go test ./...
+
+      - name: Run vet
+        run: go vet ./...
+
+      - name: Check embedded UI scripts
+        run: node tools/check-ui.mjs
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: validate
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build versioned Windows release
+        shell: pwsh
+        run: |
+          $env:CLIPPER_VERSION = $env:GITHUB_REF_NAME
+          cmd /c build.bat
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          gh release create $tag `
+            release/ClipperSetup.bat `
+            release/ClipperSetup.exe `
+            release/ClipperUpdate.zip `
+            release/SHA256SUMS.txt `
+            --repo $env:GITHUB_REPOSITORY `
+            --title "Clipper $tag" `
+            --generate-notes

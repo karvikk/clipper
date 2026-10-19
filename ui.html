@@ -438,7 +438,7 @@
           </section>
           <section class="card">
             <div class="card-head" style="margin-bottom:14px">
-              <div><div class="card-title"><span class="step">i</span>О Clipper</div><div class="card-hint">Вертикальные клипы с субтитрами, локальной обработкой и историей.</div></div>
+              <div><div class="card-title"><span class="step">i</span>О Clipper <span id="appVersion" class="stat-chip">dev</span></div><div class="card-hint">Вертикальные клипы с субтитрами, локальной обработкой и историей.</div></div>
             </div>
             <p class="settings-description">Clipper использует Whisper для распознавания речи, FFmpeg для монтажа и yt-dlp для загрузки видео. Настройки, библиотека и история не передаются в облако.</p>
           </section>
@@ -813,6 +813,7 @@
       if (typeof window.getAppState !== "function") return;
       try {
         const state = JSON.parse(await window.getAppState());
+        byId("appVersion").textContent = state.version || "dev";
         outputFolder = state.workDir;
         byId("outputPath").textContent = outputFolder;
         byId("settingsOutputPath").textContent = outputFolder;

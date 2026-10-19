@@ -11,7 +11,8 @@ if not "%GOARCH%"=="amd64" (
 )
 
 echo Building Clipper for Windows x64...
-go build -trimpath -ldflags="-H=windowsgui" -o "release\Clipper.exe" .
+if not defined CLIPPER_VERSION set "CLIPPER_VERSION=dev"
+go build -trimpath -ldflags="-H=windowsgui -X main.appVersion=%CLIPPER_VERSION%" -o "release\Clipper.exe" .
 if errorlevel 1 (
   echo.
   echo Build failed. Check that Go 1.26.2 is installed.
@@ -49,6 +50,11 @@ if errorlevel 1 (
   echo Could not create the update-only archive.
   exit /b 1
 )
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$files=@('ClipperSetup.bat','ClipperSetup.exe','ClipperUpdate.zip'); $lines=foreach($name in $files){$path=Join-Path 'release' $name; $hash=(Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant(); ('{0}  {1}' -f $hash,$name)}; [IO.File]::WriteAllLines((Join-Path 'release' 'SHA256SUMS.txt'), $lines, [Text.Encoding]::ASCII)"
+if errorlevel 1 (
+  echo Could not create the release SHA-256 checksums.
+  exit /b 1
+)
 
 echo.
 echo Application: %CD%\release\Clipper.exe
@@ -57,3 +63,4 @@ echo   %CD%\release\ClipperSetup.bat
 echo   %CD%\release\ClipperSetup.exe
 echo For a friend who already has Clipper, share only:
 echo   %CD%\release\ClipperUpdate.zip
+echo Checksums: %CD%\release\SHA256SUMS.txt

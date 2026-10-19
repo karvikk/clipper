@@ -33,6 +33,7 @@ type StartRequest struct {
 }
 
 type AppState struct {
+	Version      string `json:"version"`
 	WorkDir      string `json:"workDir"`
 	GameplayURL  string `json:"gameplayUrl"`
 	GameplayPath string `json:"gameplayPath"`
@@ -184,7 +185,7 @@ func newApp(window webview2.WebView) (*App, error) {
 		return nil, fmt.Errorf("не удалось создать папку клипов: %w", err)
 	}
 
-	state := AppState{WorkDir: workDir, ClipCount: 3, ClipDuration: defaultClipLength}
+	state := AppState{Version: appVersion, WorkDir: workDir, ClipCount: 3, ClipDuration: defaultClipLength}
 	settingsPath := filepath.Join(configDir, "settings.json")
 	if data, err := os.ReadFile(settingsPath); err == nil {
 		var previous struct {
@@ -197,6 +198,7 @@ func newApp(window webview2.WebView) (*App, error) {
 			return nil, fmt.Errorf("не удалось прочитать настройки %q: %w", settingsPath, err)
 		}
 		state.LicenseKey = previous.LicenseKey
+		state.Version = appVersion
 		state.WorkDir = workDir
 		if state.ClipCount < 1 || state.ClipCount > 20 {
 			state.ClipCount = 3

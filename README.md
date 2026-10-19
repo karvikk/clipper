@@ -24,6 +24,19 @@ For GitHub, the easiest option is a **GitHub Release** in your repository:
 
 Do not upload your personal license key, `%AppData%\Clipper` settings, or `.clipper_license` file. A GitHub Release distributes the files but does not perform silent auto-updates; the friend downloads the new ZIP and runs its update script.
 
+### Automated versioned releases
+
+The GitHub Actions workflow runs Go tests, `go vet`, and the embedded UI JavaScript syntax check on pushes to `main` and pull requests. To publish a version, create and push a semantic version tag from the tested commit:
+
+```powershell
+git switch main
+git pull --ff-only
+git tag v1.1.0
+git push origin v1.1.0
+```
+
+GitHub Actions builds Windows x64 binaries with that version embedded, creates a GitHub Release with generated notes, and attaches `ClipperSetup.bat`, `ClipperSetup.exe`, `ClipperUpdate.zip`, and `SHA256SUMS.txt`. The friend can download the matching release asset; use the setup pair for a new installation and only `ClipperUpdate.zip` for an existing one. Do not reuse a published tag; increment the version for each release. The app is not Authenticode-signed, so Windows SmartScreen may show a warning until a code-signing certificate is configured.
+
 ## App sections
 
 - **Создать клипы** — choose source/background, clip count and duration.

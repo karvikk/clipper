@@ -141,6 +141,9 @@ func run() error {
 	if err := window.Bind("getDiagnostics", app.getDiagnostics); err != nil {
 		return fmt.Errorf("не удалось подключить проверку компонентов: %w", err)
 	}
+	if err := window.Bind("openTelegramContact", openTelegramContact); err != nil {
+		return fmt.Errorf("не удалось подключить Telegram: %w", err)
+	}
 
 	window.SetSize(1180, 820, webview2.HintMin)
 	if err := applyBorderlessWindow(window.Window()); err != nil {

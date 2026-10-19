@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"syscall"
 	"unsafe"
@@ -88,6 +89,13 @@ func closeWindow() error {
 	result, _, callErr := syscall.NewLazyDLL("user32.dll").NewProc("PostMessageW").Call(windowHandle, wmClose, 0, 0)
 	if result == 0 {
 		return fmt.Errorf("не удалось закрыть окно: %w", callErr)
+	}
+	return nil
+}
+
+func openTelegramContact() error {
+	if err := exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", "https://t.me/karvikk").Start(); err != nil {
+		return fmt.Errorf("не удалось открыть Telegram: %w", err)
 	}
 	return nil
 }

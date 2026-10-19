@@ -2,7 +2,7 @@
 
 Clipper is a Windows x64 desktop app written in Go. It finds popular moments in a video (or falls back to audio analysis), transcribes speech, burns animated word captions into a 9:16 clip, and adds a local or linked gameplay video as the lower half of the frame. Clip length is adjustable from 15 to 90 seconds.
 
-Video processing runs locally. Finished clips are saved under `%USERPROFILE%\Videos\Clipper`; settings and the Whisper model live under `%AppData%\Clipper`. The access key is entered in the app's **Настройки** panel and stored encrypted with Windows DPAPI. Existing keys from both the Python app's `%USERPROFILE%\.clipper_license` file and the previous Go settings are imported automatically; the legacy Python key file is left untouched. The Keygen account and machine fingerprint format are unchanged.
+Video processing runs locally. Finished clips are saved under `%USERPROFILE%\Videos\Clipper`; settings and the Whisper model live under `%AppData%\Clipper`. The access key is entered in the app's **Настройки** panel and stored encrypted with Windows DPAPI. New users without a key are directed to Telegram [@karvikk](https://t.me/karvikk) from the settings page. Existing keys from both the Python app's `%USERPROFILE%\.clipper_license` file and the previous Go settings are imported automatically; the legacy Python key file is left untouched. The Keygen account and machine fingerprint format are unchanged.
 
 ## Install on another PC
 
@@ -31,8 +31,8 @@ The GitHub Actions workflow runs Go tests, `go vet`, and the embedded UI JavaScr
 ```powershell
 git switch main
 git pull --ff-only
-git tag v1.1.0
-git push origin v1.1.0
+git tag v1.2.0
+git push origin v1.2.0
 ```
 
 GitHub Actions builds Windows x64 binaries with that version embedded, creates a GitHub Release with generated notes, and attaches `ClipperSetup.bat`, `ClipperSetup.exe`, `ClipperUpdate.zip`, and `SHA256SUMS.txt`. The friend can download the matching release asset; use the setup pair for a new installation and only `ClipperUpdate.zip` for an existing one. Do not reuse a published tag; increment the version for each release. The app is not Authenticode-signed, so Windows SmartScreen may show a warning until a code-signing certificate is configured.

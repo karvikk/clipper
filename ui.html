@@ -243,6 +243,15 @@
     .history-status.error { color: #ff9ca4; }
     .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
     .settings-description { margin: 0 0 18px; color: var(--muted); font-size: 11px; line-height: 1.55; }
+    .license-help {
+      margin-top: 13px; padding: 12px; border: 1px solid rgba(155,123,255,.2);
+      border-radius: 10px; background: rgba(155,123,255,.06); color: #c9c5d3;
+      font-size: 11px; line-height: 1.55;
+    }
+    .license-help button {
+      padding: 0; border: 0; background: transparent; color: var(--purple-bright);
+      font-weight: 700; text-decoration: underline; text-underline-offset: 2px; cursor: pointer;
+    }
     .diagnostic-list { display: grid; gap: 8px; }
     .diagnostic-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px; border: 1px solid var(--stroke); border-radius: 9px; background: rgba(255,255,255,.02); }
     .diagnostic-name { font-size: 11px; }
@@ -419,6 +428,9 @@
               <div class="license-label"><label for="settingsLicenseKey">Ключ доступа</label><span id="licenseQuota">не сохранён</span></div>
               <input id="settingsLicenseKey" type="password" placeholder="Введи ключ лицензии" autocomplete="off">
               <div class="field-note">Ключ защищён DPAPI Windows и доступен только вашей учётной записи.</div>
+              <div class="license-help">Впервые пользуешься Clipper и ещё нет ключа? Для получения ключа напиши в Telegram:
+                <button id="telegramContact" type="button">@karvikk</button>
+              </div>
             </div>
             <div class="settings-actions"><button id="settingsSave" class="save-settings" type="button">Сохранить ключ</button></div>
           </section>
@@ -735,7 +747,13 @@
       try {
         await window.startClipping(JSON.stringify(request));
       } catch (error) {
-        notify(String(error).replace(/^Error:\s*/, ""));
+        const message = String(error).replace(/^Error:\s*/, "");
+        if (message.includes("сначала сохраните ключ доступа")) {
+          showPage("settings");
+          notify("Для первого запуска нужен ключ. Чтобы получить его, напиши в Telegram @karvikk.");
+        } else {
+          notify(message);
+        }
       }
     });
 
@@ -796,6 +814,10 @@
       } finally {
         byId("settingsSave").disabled = false;
       }
+    });
+    byId("telegramContact").addEventListener("click", async () => {
+      try { await window.openTelegramContact(); }
+      catch (error) { notify(String(error).replace(/^Error:\s*/, "")); }
     });
 
     byId("windowBar").addEventListener("mousedown", event => {

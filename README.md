@@ -26,7 +26,7 @@ Do not upload your personal license key, `%AppData%\Clipper` settings, or `.clip
 
 ### Automated versioned releases
 
-The GitHub Actions workflow runs Go tests, `go vet`, and the embedded UI JavaScript syntax check on pushes to `main` and pull requests. To publish a version, create and push a semantic version tag from the tested commit:
+The GitHub Actions workflow runs Go tests, `go vet`, and the embedded UI JavaScript syntax check on pushes to `main` and pull requests. It pins current Node 24-compatible official actions. To publish a version, create and push a semantic version tag from the tested commit:
 
 ```powershell
 git switch main

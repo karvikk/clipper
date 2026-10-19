@@ -50,7 +50,7 @@ if errorlevel 1 (
   echo Could not create the update-only archive.
   exit /b 1
 )
-powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$files=@('ClipperSetup.bat','ClipperSetup.exe','ClipperUpdate.zip'); $lines=foreach($name in $files){$path=Join-Path 'release' $name; $hash=(Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant(); ('{0}  {1}' -f $hash,$name)}; [IO.File]::WriteAllLines((Join-Path 'release' 'SHA256SUMS.txt'), $lines, [Text.Encoding]::ASCII)"
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "tools\write-checksums.ps1" -ReleaseDirectory "release"
 if errorlevel 1 (
   echo Could not create the release SHA-256 checksums.
   exit /b 1

@@ -35,7 +35,7 @@ git tag v1.2.0
 git push origin v1.2.0
 ```
 
-GitHub Actions builds Windows x64 binaries with that version embedded, creates a GitHub Release with generated notes, and attaches `ClipperSetup.bat`, `ClipperSetup.exe`, `ClipperUpdate.zip`, and `SHA256SUMS.txt`. The friend can download the matching release asset; use the setup pair for a new installation and only `ClipperUpdate.zip` for an existing one. Do not reuse a published tag; increment the version for each release. The app is not Authenticode-signed, so Windows SmartScreen may show a warning until a code-signing certificate is configured.
+GitHub Actions builds Windows x64 binaries with that version embedded, creates a GitHub Release with generated change notes and explicit download instructions, and attaches `ClipperSetup.bat`, `ClipperSetup.exe`, `ClipperUpdate.zip`, and `SHA256SUMS.txt`. In the release's **Assets** list, use the setup pair for a new installation and only `ClipperUpdate.zip` for an existing one. Do not reuse a published tag; increment the version for each release. The app is not Authenticode-signed, so Windows SmartScreen may show a warning until a code-signing certificate is configured.
 
 ## App sections
 

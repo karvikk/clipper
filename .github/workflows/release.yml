@@ -68,6 +68,22 @@ jobs:
         shell: pwsh
         run: |
           $tag = $env:GITHUB_REF_NAME
+          $generatedNotes = gh api `
+            --method POST `
+            "repos/$env:GITHUB_REPOSITORY/releases/generate-notes" `
+            --field "tag_name=$tag" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $notes = @"
+          ## Что скачать
+
+          - **Устанавливаете Clipper впервые?** Скачайте `ClipperSetup.bat` и `ClipperSetup.exe`. Запустите `.bat` — он проверит WebView2 и откроет установщик.
+          - **Clipper уже установлен и нужно обновление?** Скачайте только `ClipperUpdate.zip`, распакуйте архив и запустите `ApplyUpdate.bat`. Настройки, ключ и клипы сохранятся.
+          - `SHA256SUMS.txt` содержит контрольные суммы файлов.
+
+          ## Изменения
+
+          $($generatedNotes.body)
+          "@
           gh release create $tag `
             release/ClipperSetup.bat `
             release/ClipperSetup.exe `
@@ -75,4 +91,4 @@ jobs:
             release/SHA256SUMS.txt `
             --repo $env:GITHUB_REPOSITORY `
             --title "Clipper $tag" `
-            --generate-notes
+            --notes $notes

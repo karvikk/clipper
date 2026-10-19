@@ -170,5 +170,19 @@ func writeFileAtomically(path string, data []byte, mode os.FileMode) error {
 	if err := temp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tempPath, path)
+	return replaceFile(tempPath, path)
+}
+
+func replaceFile(source, destination string) error {
+	sourcePath, err := windows.UTF16PtrFromString(source)
+	if err != nil {
+		return err
+	}
+	destinationPath, err := windows.UTF16PtrFromString(destination)
+	if err != nil {
+		return err
+	}
+	const moveFileReplaceExisting = 0x1
+	const moveFileWriteThrough = 0x8
+	return windows.MoveFileEx(sourcePath, destinationPath, moveFileReplaceExisting|moveFileWriteThrough)
 }

@@ -138,6 +138,85 @@ func TestFFmpegVersionComparison(t *testing.T) {
 	}
 }
 
+func TestVersionCompareUsesSemanticVersionParts(t *testing.T) {
+	for _, test := range []struct {
+		left, right string
+		want        int
+	}{
+		{"v1.10.0", "v1.9.9", 1},
+		{"v1.2.0", "v1.2.0", 0},
+		{"v1.2.0", "v1.2.1", -1},
+		{"dev", "v1.0.0", -1},
+	} {
+		if got := versionCompare(test.left, test.right); got != test.want {
+			t.Errorf("versionCompare(%q, %q) = %d, want %d", test.left, test.right, got, test.want)
+		}
+	}
+}
+
+func TestParseLatestClipperReleaseRequiresChecksummedInstaller(t *testing.T) {
+	release := githubRelease{
+		TagName: "v1.3.0",
+		Assets: []releaseAsset{{
+			Name: "ClipperSetup.exe", URL: "https://example.com/ClipperSetup.exe",
+			Digest: "sha256:" + strings.Repeat("a", 64), Size: 2048,
+		}},
+	}
+	got, err := parseLatestClipperRelease(release)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Version != "v1.3.0" || got.Installer.name != "ClipperSetup.exe" || got.Installer.size != 2048 {
+		t.Fatalf("parsed latest release = %#v", got)
+	}
+	release.Assets[0].Digest = ""
+	if _, err := parseLatestClipperRelease(release); err == nil {
+		t.Fatal("latest release without an installer checksum was accepted")
+	}
+}
+
+func TestInstalledVersionFileRoundTrips(t *testing.T) {
+	directory := filepath.Join(t.TempDir(), "Clipper")
+	if err := writeInstalledVersion(directory, "v1.3.0"); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeInstalledVersion(directory, "v1.3.1"); err != nil {
+		t.Fatalf("replace installed version: %v", err)
+	}
+	got, err := readInstalledVersion(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "v1.3.1" {
+		t.Fatalf("installed version = %q, want v1.3.1", got)
+	}
+	if err := writeInstalledVersion(directory, "not-a-version"); err == nil {
+		t.Fatal("invalid version was written")
+	}
+}
+
+func TestCopyFileReplacesExistingExecutable(t *testing.T) {
+	directory := t.TempDir()
+	source := filepath.Join(directory, "new.exe")
+	destination := filepath.Join(directory, "Clipper.exe")
+	if err := os.WriteFile(source, []byte("new version"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(destination, []byte("old version"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := copyFile(source, destination, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "new version" {
+		t.Fatalf("installed executable contents = %q, want new version", got)
+	}
+}
+
 func TestClipLibraryListsOnlyCompletedClipFiles(t *testing.T) {
 	directory := t.TempDir()
 	for name, content := range map[string]string{

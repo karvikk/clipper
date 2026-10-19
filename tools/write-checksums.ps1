@@ -3,7 +3,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$files = @('ClipperSetup.exe', 'ClipperUpdate.zip')
+$files = @('ClipperSetup.exe')
 $lines = foreach ($name in $files) {
     $path = Join-Path $ReleaseDirectory $name
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {

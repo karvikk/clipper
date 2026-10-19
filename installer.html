@@ -52,22 +52,24 @@
     </div>
   </div>
   <main>
-    <div class="eyebrow">Быстрая установка</div>
-    <h1>Clipper — готов к работе</h1>
-    <p class="intro">Этот один файл установит Clipper, WebView2 и необходимые программы из официальных источников, проверит контрольные суммы и подготовит ярлыки. После установки не нужен Python или ручная настройка Whisper.</p>
+    <div class="eyebrow">Установка и обновление</div>
+    <h1>Clipper — одна кнопка</h1>
+    <p class="intro">Один файл проверяет актуальную версию GitHub. Если Clipper ещё не установлен — скачает и настроит всё необходимое; если установлен — обновит приложение, сохранив ключ, настройки и клипы.</p>
     <section class="card">
       <div class="components">
         <div class="component"><div class="component-icon">01</div><div><div class="component-name">Clipper Studio</div><div class="component-detail">Приложение для Windows x64</div></div></div>
         <div class="component"><div class="component-icon">02</div><div><div class="component-name">Whisper.cpp и модель распознавания</div><div class="component-detail">Автоматические русские субтитры по словам</div></div></div>
         <div class="component"><div class="component-icon">03</div><div><div class="component-name">FFmpeg, yt-dlp и Deno</div><div class="component-detail">Скачивание видео, звук и сборка клипов</div></div></div>
       </div>
-      <div class="size-note">Нужны интернет и около 350 МБ для загрузки компонентов. Whisper и его модель устанавливаются вместе с программой, а при повреждении автоматически проверяются и восстанавливаются при обработке. Ключ вводится позже в настройках.</div>
-      <div id="status" class="status">Готов установить Clipper для текущей учётной записи Windows.</div>
+      <div class="size-note">При первой установке потребуется около 350 МБ. При обычном обновлении скачивается только новая версия приложения. Whisper и его модель сохраняются, проверяются и при необходимости восстанавливаются.</div>
+      <div id="versionInfo" class="status">Проверяю установленную и последнюю версии…</div>
+      <div id="status" class="status">Подключаюсь к GitHub Releases…</div>
       <div class="progress-track"><div id="progress" class="progress"></div></div>
       <div class="progress-label"><span id="step">Ожидание</span><span id="percent">0%</span></div>
       <div class="actions">
         <button id="closeButton" type="button">Закрыть</button>
-        <button id="installButton" class="primary" type="button">Установить Clipper</button>
+        <button id="checkButton" type="button">Проверить обновления</button>
+        <button id="installButton" class="primary" type="button" disabled>Проверка версии…</button>
         <button id="launchButton" class="primary" type="button" hidden>Запустить Clipper</button>
       </div>
     </section>
@@ -76,6 +78,9 @@
   <script>
     const byId = id => document.getElementById(id);
     let installing = false;
+    let installed = false;
+    let installedVersion = "";
+    let latestVersion = "";
     window.onInstallerEvent = event => {
       byId("status").textContent = event.message || "";
       byId("status").className = `status${event.error ? " error" : event.done ? " ok" : ""}`;
@@ -88,23 +93,60 @@
         byId("installButton").hidden = true;
         byId("launchButton").hidden = false;
         byId("closeButton").textContent = "Закрыть";
+        byId("installButton").disabled = true;
       } else if (event.error) {
         installing = false;
         byId("installButton").disabled = false;
-        byId("installButton").textContent = "Повторить";
+        byId("installButton").textContent = installed ? "Повторить обновление" : "Повторить установку";
       }
     };
+    async function checkForUpdates() {
+      byId("checkButton").disabled = true;
+      byId("installButton").disabled = true;
+      byId("installButton").textContent = "Проверяю версию…";
+      byId("status").className = "status";
+      byId("status").textContent = "Подключаюсь к GitHub Releases…";
+      try {
+        const state = JSON.parse(await window.getInstallerState());
+        installed = state.installed;
+        installedVersion = state.installedVersion || "";
+        latestVersion = state.latestVersion;
+        byId("versionInfo").textContent = installed
+          ? `Установлена версия: ${installedVersion || "неизвестна"} · Актуальная версия: ${latestVersion}`
+          : `Clipper пока не установлен · Последняя версия: ${latestVersion}`;
+        if (installed && installedVersion === latestVersion) {
+          byId("status").className = "status ok";
+          byId("status").textContent = "У вас последняя версия. Проверю целостность инструментов и восстановлю недостающие компоненты.";
+          byId("installButton").textContent = "Проверить Clipper";
+        } else if (installed) {
+          byId("status").textContent = "Доступно обновление. Настройки, ключ, инструменты и готовые ролики останутся на месте.";
+          byId("installButton").textContent = "Обновить Clipper";
+        } else {
+          byId("status").textContent = "Будут установлены Clipper, Whisper, модель распознавания, WebView2 и необходимые инструменты.";
+          byId("installButton").textContent = "Установить Clipper";
+        }
+        byId("installButton").disabled = false;
+        byId("checkButton").disabled = false;
+      } catch (error) {
+        byId("versionInfo").textContent = "Не удалось проверить версию Clipper.";
+        byId("status").className = "status error";
+        byId("status").textContent = String(error).replace(/^Error:\s*/, "");
+        byId("installButton").textContent = "Повторить проверку";
+        byId("installButton").disabled = false;
+        byId("checkButton").disabled = false;
+      }
+    }
     byId("installButton").addEventListener("click", async () => {
       if (installing) return;
       installing = true;
       byId("installButton").disabled = true;
-      byId("installButton").textContent = "Установка…";
-      byId("step").textContent = "Установка";
+      byId("installButton").textContent = installed ? "Обновление…" : "Установка…";
+      byId("step").textContent = installed ? "Обновление" : "Установка";
       try { await window.startInstall(); }
       catch (error) {
         installing = false;
         byId("installButton").disabled = false;
-        byId("installButton").textContent = "Повторить";
+        byId("installButton").textContent = installed ? "Повторить обновление" : "Повторить установку";
         byId("status").className = "status error";
         byId("status").textContent = String(error).replace(/^Error:\s*/, "");
       }
@@ -114,12 +156,14 @@
       catch (error) { byId("status").className = "status error"; byId("status").textContent = String(error); }
     });
     byId("closeButton").addEventListener("click", () => window.closeInstaller());
+    byId("checkButton").addEventListener("click", checkForUpdates);
     byId("close").addEventListener("click", () => window.closeInstaller());
     byId("minimize").addEventListener("click", () => window.minimizeWindow());
     byId("maximize").addEventListener("click", () => window.toggleMaximizeWindow());
     byId("windowBar").addEventListener("mousedown", event => {
       if (event.button === 0 && !event.target.closest(".window-controls")) window.beginWindowDrag();
     });
+    checkForUpdates();
   </script>
 </body>
 </html>

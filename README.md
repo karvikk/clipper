@@ -8,23 +8,19 @@ Clipper uses a working hardware H.264 encoder when FFmpeg can verify NVIDIA NVEN
 
 ## Install on another PC
 
-Run `build.bat`. It creates `Clipper.exe` and a `release\` folder containing the app, a single-file installer, and a small update-only ZIP. For a first install, share only `release\ClipperSetup.exe`; the recipient downloads and runs this one file.
+Run `build.bat`. It creates `Clipper.exe` and a `release\` folder containing the app and one `ClipperSetup.exe`. Share that same installer for a new install or an update; it checks the latest GitHub release every time it is launched.
 
-The installer EXE verifies and installs Microsoft's signed WebView2 Runtime if needed, then downloads about 350 MB of required components including Whisper and its model. It verifies component SHA-256 digests, installs the app for the current Windows user, and creates Desktop and Start menu shortcuts. It does not require Python, Go, or administrator privileges on the recipient's PC. An internet connection is required during setup. If Whisper or its model is later missing or damaged, Clipper verifies and restores it at the next processing attempt. The installed app can then run offline except for online video downloads, license checks, or component repair.
+The installer EXE verifies and installs Microsoft's signed WebView2 Runtime if needed, then downloads about 350 MB of required components including Whisper and its model on a fresh install. It verifies component SHA-256 digests, installs the app for the current Windows user, and creates Desktop and Start menu shortcuts. It does not require Python, Go, or administrator privileges on the recipient's PC. An internet connection is required to check releases and download components. If Clipper is already installed, the same file compares versions and replaces only the app executable when an update is available, preserving Whisper, tools, settings, access key, history, and clips. Missing core components trigger a verified repair install. If Whisper or its model is later missing or damaged, Clipper verifies and restores it at the next processing attempt.
 
 Components are downloaded from the official [whisper.cpp releases](https://github.com/ggml-org/whisper.cpp/releases), [FFmpeg builds](https://github.com/BtbN/FFmpeg-Builds/releases), [yt-dlp releases](https://github.com/yt-dlp/yt-dlp/releases), [Deno releases](https://github.com/denoland/deno/releases), and [whisper.cpp model repository](https://huggingface.co/ggerganov/whisper.cpp). Setup verifies all release asset digests supplied by GitHub and pinned SHA-256 values for the Whisper executable archive and model before installing them.
 
-## Send an update to a friend
-
-The friend does **not** need to download or install Whisper and FFmpeg again. After running `build.bat`, send only `release\ClipperUpdate.zip`. They extract all files to a folder and run `ApplyUpdate.bat`; the script waits until their Clipper is closed and replaces only `Clipper.exe`. It leaves the installed tools, Whisper model, saved access key, settings, history, and completed clips in place. If the friend has not installed Clipper yet, send `release\ClipperSetup.exe`.
-
-For GitHub, the easiest option is a **GitHub Release** in your repository:
+## Share Clipper or an update
 
 1. Keep the project source in the repository. Include the Go files, `ui.html`, `installer.html`, `.bat`/`.ps1` scripts, `go.mod`, `go.sum`, tests, and `README.md`. `.gitignore` excludes generated EXEs, release packages, and video outputs.
-2. For an update to an existing installation, attach **only `ClipperUpdate.zip`** from `release\` to the release. Your friend downloads and runs `ApplyUpdate.bat` from the extracted archive.
-3. For a first-time installation, attach **only `ClipperSetup.exe`**. It installs/checks WebView2 and downloads Clipper, Whisper, and the other processing tools.
+2. Create a GitHub Release and attach **only `ClipperSetup.exe`** and `SHA256SUMS.txt`.
+3. For either a first-time install or an update, your friend downloads and launches `ClipperSetup.exe`. It detects the installed version, checks GitHub for the newest release, then installs or updates accordingly.
 
-Do not upload your personal license key, `%AppData%\Clipper` settings, or `.clipper_license` file. A GitHub Release distributes the files but does not perform silent auto-updates; the friend downloads the new ZIP and runs its update script.
+Do not upload your personal license key, `%AppData%\Clipper` settings, or `.clipper_license` file. The installed app does not silently update itself; download and run the latest `ClipperSetup.exe` when you want to check for updates.
 
 ### Automated versioned releases
 
@@ -33,11 +29,11 @@ The GitHub Actions workflow runs Go tests, `go vet`, and the embedded UI JavaScr
 ```powershell
 git switch main
 git pull --ff-only
-git tag v1.2.0
-git push origin v1.2.0
+git tag v1.4.0
+git push origin v1.4.0
 ```
 
-GitHub Actions builds Windows x64 binaries with that version embedded, creates a GitHub Release with generated change notes and explicit download instructions, and attaches `ClipperSetup.exe`, `ClipperUpdate.zip`, and `SHA256SUMS.txt`. In the release's **Assets** list, download only `ClipperSetup.exe` for a new installation and only `ClipperUpdate.zip` for an existing one. Do not reuse a published tag; increment the version for each release. The app is not Authenticode-signed, so Windows SmartScreen may show a warning until a code-signing certificate is configured.
+GitHub Actions builds Windows x64 binaries with that version embedded, creates a GitHub Release with generated change notes and explicit download instructions, and attaches only `ClipperSetup.exe` and `SHA256SUMS.txt`. The same `ClipperSetup.exe` checks GitHub for newer versions and performs either a new installation or an update. Do not reuse a published tag; increment the version for each release. The app is not Authenticode-signed, so Windows SmartScreen may show a warning until a code-signing certificate is configured.
 
 ## App sections
 

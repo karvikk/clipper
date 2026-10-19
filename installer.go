@@ -39,6 +39,7 @@ const (
 	whisperModelSHA   = "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb"
 	whisperModelSize  = int64(190085487)
 	webView2SetupURL  = "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
+	clipperReleaseURL = "https://api.github.com/repos/karvikk/clipper/releases/latest"
 )
 
 type installerAsset struct {
@@ -56,7 +57,21 @@ type releaseAsset struct {
 }
 
 type githubRelease struct {
-	Assets []releaseAsset `json:"assets"`
+	TagName string         `json:"tag_name"`
+	Assets  []releaseAsset `json:"assets"`
+}
+
+type latestClipperRelease struct {
+	Version   string
+	Installer installerAsset
+}
+
+type installerState struct {
+	Installed        bool   `json:"installed"`
+	InstalledVersion string `json:"installedVersion"`
+	LatestVersion    string `json:"latestVersion"`
+	CurrentVersion   string `json:"currentVersion"`
+	UpdateAvailable  bool   `json:"updateAvailable"`
 }
 
 type installerEvent struct {
@@ -108,6 +123,7 @@ func runInstaller() error {
 		name string
 		fn   any
 	}{
+		{"getInstallerState", app.getInstallerState},
 		{"startInstall", app.startInstall},
 		{"launchInstalledClipper", app.launchInstalledClipper},
 		{"closeInstaller", app.closeInstaller},
@@ -127,6 +143,35 @@ func runInstaller() error {
 	window.SetHtml(installerHTML)
 	window.Run()
 	return nil
+}
+
+func (a *installerApp) getInstallerState() (string, error) {
+	ctx, cancel := context.WithTimeout(a.ctx, 30*time.Second)
+	defer cancel()
+	release, err := getLatestClipperRelease(ctx)
+	if err != nil {
+		return "", err
+	}
+	installDir, err := clipperInstallDir()
+	if err != nil {
+		return "", err
+	}
+	installedVersion, err := readInstalledVersion(installDir)
+	if err != nil {
+		return "", err
+	}
+	state := installerState{
+		Installed:        fileExists(filepath.Join(installDir, "Clipper.exe")),
+		InstalledVersion: installedVersion,
+		LatestVersion:    release.Version,
+		CurrentVersion:   appVersion,
+		UpdateAvailable:  installedVersion == "" || versionCompare(release.Version, installedVersion) > 0,
+	}
+	data, err := json.Marshal(state)
+	if err != nil {
+		return "", fmt.Errorf("не удалось подготовить сведения об обновлениях: %w", err)
+	}
+	return string(data), nil
 }
 
 func ensureWebView2Runtime(ctx context.Context) error {
@@ -241,7 +286,7 @@ func (a *installerApp) startInstall() error {
 	a.mu.Unlock()
 	a.emit(installerEvent{Message: "Подключаюсь к официальным источникам…", Progress: 1})
 	go func() {
-		err := installClipper(a.ctx, func(message string, progress float64) {
+		alreadyCurrent, err := installOrUpdateClipper(a.ctx, func(message string, progress float64) {
 			a.emit(installerEvent{Message: message, Progress: progress})
 		})
 		a.mu.Lock()
@@ -251,7 +296,11 @@ func (a *installerApp) startInstall() error {
 			a.emit(installerEvent{Message: err.Error(), Error: true})
 			return
 		}
-		a.emit(installerEvent{Message: "Clipper установлен. Все компоненты проверены по SHA-256.", Progress: 100, Done: true})
+		message := "Clipper установлен или обновлён. Все загруженные компоненты проверены по SHA-256."
+		if alreadyCurrent {
+			message = "Установлена последняя версия Clipper."
+		}
+		a.emit(installerEvent{Message: message, Progress: 100, Done: true})
 	}()
 	return nil
 }
@@ -288,7 +337,131 @@ func (a *installerApp) emit(event installerEvent) {
 	})
 }
 
-func installClipper(ctx context.Context, progress func(string, float64)) error {
+func installOrUpdateClipper(ctx context.Context, progress func(string, float64)) (bool, error) {
+	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
+		return false, errors.New("установка поддерживает только Windows x64")
+	}
+	release, err := getLatestClipperRelease(ctx)
+	if err != nil {
+		return false, fmt.Errorf("не удалось проверить последнюю версию Clipper: %w", err)
+	}
+	installDir, err := clipperInstallDir()
+	if err != nil {
+		return false, err
+	}
+	installedExecutable := filepath.Join(installDir, "Clipper.exe")
+	installed := fileExists(installedExecutable)
+	installedVersion, err := readInstalledVersion(installDir)
+	if err != nil {
+		return false, err
+	}
+	if installed && installedVersion != "" &&
+		versionCompare(installedVersion, release.Version) >= 0 &&
+		installedComponentsReady(installDir) {
+		return true, nil
+	}
+	targetVersion := release.Version
+	if versionCompare(appVersion, targetVersion) > 0 {
+		targetVersion = appVersion
+	}
+
+	tempDir, err := os.MkdirTemp("", "clipper-update-check-*")
+	if err != nil {
+		return false, fmt.Errorf("не удалось создать временную папку обновления: %w", err)
+	}
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			log.Printf("Не удалось очистить временные файлы обновления %q: %v", tempDir, err)
+		}
+	}()
+	sourceExecutable, err := os.Executable()
+	if err != nil {
+		return false, fmt.Errorf("не удалось определить файл установщика: %w", err)
+	}
+	if versionCompare(appVersion, release.Version) < 0 {
+		sourceExecutable = filepath.Join(tempDir, "ClipperSetup.exe")
+		progress("Найдена новая версия установщика "+release.Version+"; скачиваю её…", 4)
+		if err := downloadVerified(ctx, release.Installer, sourceExecutable, func(received, total int64) {
+			fraction := float64(0)
+			if total > 0 {
+				fraction = float64(received) / float64(total)
+			}
+			progress("Скачиваю Clipper ("+formatBytes(received)+")…", 4+fraction*15)
+		}); err != nil {
+			return false, fmt.Errorf("не удалось скачать актуальную версию Clipper: %w", err)
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	if installed && installedComponentsReady(installDir) {
+		progress("Обновляю только приложение; инструменты, ключ и клипы сохраняются…", 75)
+		if err := copyFile(sourceExecutable, installedExecutable, 0o755); err != nil {
+			return false, fmt.Errorf("не удалось заменить приложение. Закройте Clipper, если он запущен, и повторите: %w", err)
+		}
+		if err := writeInstalledVersion(installDir, targetVersion); err != nil {
+			return false, fmt.Errorf("приложение обновлено, но не удалось сохранить номер версии: %w", err)
+		}
+		progress("Обновление завершено.", 100)
+		return false, nil
+	}
+	progress("Нужна установка или восстановление компонентов; подготавливаю полный комплект…", 20)
+	if err := installClipper(ctx, sourceExecutable, targetVersion, progress); err != nil {
+		return false, err
+	}
+	return false, nil
+}
+
+func clipperInstallDir() (string, error) {
+	localAppData := os.Getenv("LOCALAPPDATA")
+	if localAppData == "" {
+		return "", errors.New("Windows не сообщил путь LOCALAPPDATA")
+	}
+	return filepath.Join(localAppData, "Programs", "Clipper"), nil
+}
+
+func readInstalledVersion(installDir string) (string, error) {
+	data, err := os.ReadFile(filepath.Join(installDir, "version.txt"))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
+		return "", fmt.Errorf("не удалось прочитать версию установленного Clipper: %w", err)
+	}
+	version := strings.TrimSpace(string(data))
+	if version != "" && !validReleaseVersion(version) {
+		return "", fmt.Errorf("файл версии установленного Clipper содержит неверное значение %q", version)
+	}
+	return version, nil
+}
+
+func writeInstalledVersion(installDir, version string) error {
+	if !validReleaseVersion(version) {
+		return fmt.Errorf("неверный номер версии Clipper %q", version)
+	}
+	if err := os.MkdirAll(installDir, 0o755); err != nil {
+		return err
+	}
+	return writeFileAtomically(filepath.Join(installDir, "version.txt"), []byte(version+"\n"), 0o644)
+}
+
+func installedComponentsReady(installDir string) bool {
+	for _, name := range []string{"ffmpeg.exe", "ffprobe.exe", "yt-dlp.exe", "deno.exe"} {
+		if !fileExists(filepath.Join(installDir, "tools", name)) {
+			return false
+		}
+	}
+	if !validWhisperExecutable(filepath.Join(installDir, "tools", "whisper-cli.exe")) {
+		return false
+	}
+	model, err := os.UserConfigDir()
+	if err != nil {
+		return false
+	}
+	return validInstalledWhisperModel(filepath.Join(model, "Clipper", "models", "ggml-small-q5_1.bin"))
+}
+
+func installClipper(ctx context.Context, executable, version string, progress func(string, float64)) error {
 	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
 		return errors.New("установка поддерживает только Windows x64")
 	}
@@ -372,13 +545,9 @@ func installClipper(ctx context.Context, progress func(string, float64)) error {
 		return fmt.Errorf("не удалось подготовить yt-dlp: %w", err)
 	}
 
-	executable, err := os.Executable()
+	installDir, err := clipperInstallDir()
 	if err != nil {
-		return fmt.Errorf("не удалось определить файл установщика: %w", err)
-	}
-	installDir := filepath.Join(os.Getenv("LOCALAPPDATA"), "Programs", "Clipper")
-	if os.Getenv("LOCALAPPDATA") == "" {
-		return errors.New("Windows не сообщил путь LOCALAPPDATA")
+		return err
 	}
 	modelDir, err := os.UserConfigDir()
 	if err != nil {
@@ -401,6 +570,9 @@ func installClipper(ctx context.Context, progress func(string, float64)) error {
 	}
 	if err := copyFile(filepath.Join(downloadsDir, "ggml-small-q5_1.bin"), filepath.Join(modelDir, "ggml-small-q5_1.bin"), 0o644); err != nil {
 		return fmt.Errorf("не удалось установить модель Whisper: %w", err)
+	}
+	if err := writeInstalledVersion(installDir, version); err != nil {
+		return fmt.Errorf("не удалось сохранить версию Clipper: %w", err)
 	}
 	if err := createClipperShortcuts(installDir); err != nil {
 		return fmt.Errorf("файлы установлены, но не удалось создать ярлыки: %w", err)
@@ -547,6 +719,54 @@ func resolveInstallerAssets(ctx context.Context) ([]installerAsset, error) {
 		name: "whisper.zip", url: whisperArchiveURL, hash: whisperArchiveSHA,
 	}
 	return []installerAsset{whisper, ffmpeg, ytdlp, deno, model}, nil
+}
+
+func getLatestClipperRelease(ctx context.Context) (latestClipperRelease, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, clipperReleaseURL, nil)
+	if err != nil {
+		return latestClipperRelease{}, err
+	}
+	request.Header.Set("Accept", "application/vnd.github+json")
+	request.Header.Set("User-Agent", "Clipper-Installer")
+	response, err := installerHTTPClient.Do(request)
+	if err != nil {
+		return latestClipperRelease{}, fmt.Errorf("проверьте подключение к интернету: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return latestClipperRelease{}, fmt.Errorf("GitHub Releases ответил HTTP %d", response.StatusCode)
+	}
+	var release githubRelease
+	if err := json.NewDecoder(io.LimitReader(response.Body, 4<<20)).Decode(&release); err != nil {
+		return latestClipperRelease{}, fmt.Errorf("не удалось прочитать последний релиз Clipper: %w", err)
+	}
+	return parseLatestClipperRelease(release)
+}
+
+func parseLatestClipperRelease(release githubRelease) (latestClipperRelease, error) {
+	if !validReleaseVersion(release.TagName) {
+		return latestClipperRelease{}, fmt.Errorf("GitHub вернул неверную версию Clipper %q", release.TagName)
+	}
+	for _, asset := range release.Assets {
+		if asset.Name != "ClipperSetup.exe" {
+			continue
+		}
+		const prefix = "sha256:"
+		if !strings.HasPrefix(asset.Digest, prefix) || !validSHA256(strings.TrimPrefix(asset.Digest, prefix)) ||
+			asset.URL == "" || asset.Size <= 0 {
+			return latestClipperRelease{}, errors.New("GitHub вернул неверные контрольную сумму или размер ClipperSetup.exe")
+		}
+		return latestClipperRelease{
+			Version: release.TagName,
+			Installer: installerAsset{
+				name: "ClipperSetup.exe",
+				url:  asset.URL,
+				hash: strings.TrimPrefix(asset.Digest, prefix),
+				size: asset.Size,
+			},
+		}, nil
+	}
+	return latestClipperRelease{}, errors.New("в последнем релизе GitHub не найден ClipperSetup.exe")
 }
 
 func getReleaseAsset(ctx context.Context, releaseURL string, match func(string) bool, name string) (installerAsset, error) {
@@ -779,7 +999,7 @@ func copyFile(sourcePath, destinationPath string, mode os.FileMode) error {
 	if err := temp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tempPath, destinationPath)
+	return replaceFile(tempPath, destinationPath)
 }
 
 func createClipperShortcuts(installDir string) error {
@@ -857,6 +1077,49 @@ func versionGreater(left, right []int) bool {
 		}
 	}
 	return false
+}
+
+func validReleaseVersion(version string) bool {
+	return len(releaseVersionParts(version)) == 3
+}
+
+func releaseVersionParts(version string) []int {
+	version = strings.TrimPrefix(strings.TrimSpace(version), "v")
+	parts := strings.Split(version, ".")
+	if len(parts) != 3 {
+		return nil
+	}
+	result := make([]int, len(parts))
+	for index, part := range parts {
+		value, err := strconv.Atoi(part)
+		if err != nil || value < 0 {
+			return nil
+		}
+		result[index] = value
+	}
+	return result
+}
+
+func versionCompare(left, right string) int {
+	leftParts, rightParts := releaseVersionParts(left), releaseVersionParts(right)
+	if leftParts == nil {
+		if rightParts == nil {
+			return 0
+		}
+		return -1
+	}
+	if rightParts == nil {
+		return 1
+	}
+	for index := range leftParts {
+		if leftParts[index] < rightParts[index] {
+			return -1
+		}
+		if leftParts[index] > rightParts[index] {
+			return 1
+		}
+	}
+	return 0
 }
 
 func quotePowerShell(value string) string {

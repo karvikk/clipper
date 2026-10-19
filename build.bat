@@ -31,21 +31,9 @@ if errorlevel 1 (
   exit /b 1
 )
 if exist "release\ClipperSetup.bat" del /q "release\ClipperSetup.bat"
-copy /y "apply-update.bat" "release\ApplyUpdate.bat" >nul
-if errorlevel 1 (
-  echo Could not prepare the update launcher.
-  exit /b 1
-)
-copy /y "apply-update.ps1" "release\ApplyUpdate.ps1" >nul
-if errorlevel 1 (
-  echo Could not prepare the update script.
-  exit /b 1
-)
-powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Compress-Archive -Path 'release\Clipper.exe','release\ApplyUpdate.bat','release\ApplyUpdate.ps1' -DestinationPath 'release\ClipperUpdate.zip' -Force"
-if errorlevel 1 (
-  echo Could not create the update-only archive.
-  exit /b 1
-)
+if exist "release\ClipperUpdate.zip" del /q "release\ClipperUpdate.zip"
+if exist "release\ApplyUpdate.bat" del /q "release\ApplyUpdate.bat"
+if exist "release\ApplyUpdate.ps1" del /q "release\ApplyUpdate.ps1"
 powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "tools\write-checksums.ps1" -ReleaseDirectory "release"
 if errorlevel 1 (
   echo Could not create the release SHA-256 checksums.
@@ -56,6 +44,5 @@ echo.
 echo Application: %CD%\release\Clipper.exe
 echo Share this single installer with a new user:
 echo   %CD%\release\ClipperSetup.exe
-echo For a friend who already has Clipper, share only:
-echo   %CD%\release\ClipperUpdate.zip
+echo The same file checks for the latest release and updates an existing installation.
 echo Checksums: %CD%\release\SHA256SUMS.txt

@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Установка Clipper</title>
+  <style>
+    :root { color-scheme: dark; --bg:#111116; --panel:#1a1a21; --stroke:rgba(255,255,255,.08); --text:#f4f2f8; --muted:#9996a3; --purple:#a688ff; --green:#70d8a5; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-width:600px; min-height:100vh; color:var(--text); background:radial-gradient(600px 320px at 70% 0%,rgba(126,83,255,.13),transparent 70%),var(--bg); font:14px "Segoe UI",system-ui,sans-serif; }
+    button { color:inherit; font:inherit; }
+    .window-bar { height:38px; display:flex; align-items:center; justify-content:space-between; padding-left:15px; border-bottom:1px solid var(--stroke); background:#15151a; color:#aaa7b4; font-size:11px; user-select:none; }
+    .window-caption { display:flex; align-items:center; gap:8px; height:100%; flex:1; }
+    .mark { color:var(--purple); font-size:13px; }
+    .window-controls { height:100%; display:flex; }
+    .window-controls button { width:45px; height:100%; border:0; background:transparent; color:#b8b5c0; cursor:pointer; }
+    .window-controls button:hover { background:rgba(255,255,255,.09); }
+    .window-controls .close:hover { background:#c42b3a; color:white; }
+    main { max-width:690px; margin:auto; padding:35px 42px 29px; }
+    .eyebrow { color:var(--purple); font-size:10px; font-weight:750; letter-spacing:.16em; text-transform:uppercase; }
+    h1 { margin:10px 0 8px; font-size:29px; letter-spacing:-.045em; }
+    .intro { max-width:550px; margin:0; color:var(--muted); font-size:13px; line-height:1.6; }
+    .card { margin-top:23px; padding:20px; border:1px solid var(--stroke); border-radius:16px; background:linear-gradient(145deg,#1d1d25,#18181f); }
+    .components { display:grid; gap:13px; }
+    .component { display:flex; align-items:center; gap:12px; }
+    .component-icon { width:31px; height:31px; display:grid; place-items:center; border:1px solid var(--stroke); border-radius:9px; color:#d6caff; background:rgba(155,123,255,.08); font-size:12px; }
+    .component-name { font-size:12px; font-weight:650; }
+    .component-detail { margin-top:3px; color:var(--muted); font-size:10px; }
+    .size-note { margin-top:18px; padding-top:14px; border-top:1px solid var(--stroke); color:#aaa7b4; font-size:10px; line-height:1.5; }
+    .status { min-height:42px; margin-top:20px; color:#d7d4df; font-size:12px; line-height:1.5; }
+    .progress-track { height:7px; overflow:hidden; border-radius:9px; background:#303039; }
+    .progress { width:0; height:100%; border-radius:inherit; background:linear-gradient(90deg,#8662ef,#b49aff); transition:width .25s; }
+    .progress-label { display:flex; justify-content:space-between; margin-top:8px; color:#85828e; font-size:10px; }
+    .actions { display:flex; justify-content:flex-end; gap:9px; margin-top:21px; }
+    .actions button { height:40px; padding:0 15px; border:1px solid var(--stroke); border-radius:10px; background:#26252e; cursor:pointer; }
+    .actions .primary { border:0; background:linear-gradient(100deg,#8b68f4,#a883ff); color:white; font-weight:700; }
+    .actions .primary:hover:not(:disabled) { filter:brightness(1.08); }
+    button:disabled { opacity:.5; cursor:not-allowed; }
+    .fine-print { margin:16px 4px 0; color:#777581; font-size:9px; line-height:1.55; }
+    .ok { color:#a8e8c7; }
+    .error { color:#ff9ca4; }
+  </style>
+</head>
+<body>
+  <div class="window-bar" id="windowBar">
+    <div class="window-caption"><span class="mark">✦</span><span>Clipper · Установка</span></div>
+    <div class="window-controls">
+      <button id="minimize" aria-label="Свернуть">─</button>
+      <button id="maximize" aria-label="Развернуть">□</button>
+      <button id="close" class="close" aria-label="Закрыть">×</button>
+    </div>
+  </div>
+  <main>
+    <div class="eyebrow">Быстрая установка</div>
+    <h1>Clipper — готов к работе</h1>
+    <p class="intro">Установщик скачает Clipper и необходимые программы из официальных источников, проверит контрольные суммы и подготовит ярлыки. После установки не нужен Python или ручная настройка Whisper.</p>
+    <section class="card">
+      <div class="components">
+        <div class="component"><div class="component-icon">01</div><div><div class="component-name">Clipper Studio</div><div class="component-detail">Приложение для Windows x64</div></div></div>
+        <div class="component"><div class="component-icon">02</div><div><div class="component-name">Whisper.cpp и модель распознавания</div><div class="component-detail">Автоматические русские субтитры по словам</div></div></div>
+        <div class="component"><div class="component-icon">03</div><div><div class="component-name">FFmpeg, yt-dlp и Deno</div><div class="component-detail">Скачивание видео, звук и сборка клипов</div></div></div>
+      </div>
+      <div class="size-note">Требуется около 350 МБ загрузки и свободного места. Файлы скачиваются при установке; ключ доступа вводится позже в настройках приложения.</div>
+      <div id="status" class="status">Готов установить Clipper для текущей учётной записи Windows.</div>
+      <div class="progress-track"><div id="progress" class="progress"></div></div>
+      <div class="progress-label"><span id="step">Ожидание</span><span id="percent">0%</span></div>
+      <div class="actions">
+        <button id="closeButton" type="button">Закрыть</button>
+        <button id="installButton" class="primary" type="button">Установить Clipper</button>
+        <button id="launchButton" class="primary" type="button" hidden>Запустить Clipper</button>
+      </div>
+    </section>
+    <p class="fine-print">Whisper.cpp, FFmpeg, yt-dlp и Deno загружаются из официальных релизов; модель Whisper — из официального репозитория. Установщик проверяет SHA-256 перед использованием. Ключ, клипы и настройки остаются в профиле Windows и не передаются установщику.</p>
+  </main>
+  <script>
+    const byId = id => document.getElementById(id);
+    let installing = false;
+    window.onInstallerEvent = event => {
+      byId("status").textContent = event.message || "";
+      byId("status").className = `status${event.error ? " error" : event.done ? " ok" : ""}`;
+      const percent = Math.round(event.progress || 0);
+      byId("progress").style.width = `${percent}%`;
+      byId("percent").textContent = `${percent}%`;
+      byId("step").textContent = event.done ? "Готово" : event.error ? "Нужна проверка" : installing ? "Установка" : "Ожидание";
+      if (event.done) {
+        installing = false;
+        byId("installButton").hidden = true;
+        byId("launchButton").hidden = false;
+        byId("closeButton").textContent = "Закрыть";
+      } else if (event.error) {
+        installing = false;
+        byId("installButton").disabled = false;
+        byId("installButton").textContent = "Повторить";
+      }
+    };
+    byId("installButton").addEventListener("click", async () => {
+      if (installing) return;
+      installing = true;
+      byId("installButton").disabled = true;
+      byId("installButton").textContent = "Установка…";
+      byId("step").textContent = "Установка";
+      try { await window.startInstall(); }
+      catch (error) {
+        installing = false;
+        byId("installButton").disabled = false;
+        byId("installButton").textContent = "Повторить";
+        byId("status").className = "status error";
+        byId("status").textContent = String(error).replace(/^Error:\s*/, "");
+      }
+    });
+    byId("launchButton").addEventListener("click", async () => {
+      try { await window.launchInstalledClipper(); }
+      catch (error) { byId("status").className = "status error"; byId("status").textContent = String(error); }
+    });
+    byId("closeButton").addEventListener("click", () => window.closeInstaller());
+    byId("close").addEventListener("click", () => window.closeInstaller());
+    byId("minimize").addEventListener("click", () => window.minimizeWindow());
+    byId("maximize").addEventListener("click", () => window.toggleMaximizeWindow());
+    byId("windowBar").addEventListener("mousedown", event => {
+      if (event.button === 0 && !event.target.closest(".window-controls")) window.beginWindowDrag();
+    });
+  </script>
+</body>
+</html>

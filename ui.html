@@ -1,0 +1,833 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Clipper</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101014;
+      --panel: #19191f;
+      --panel-raised: #202027;
+      --stroke: rgba(255,255,255,.075);
+      --text: #f5f4f8;
+      --muted: #9997a4;
+      --purple: #9b7bff;
+      --purple-bright: #b197ff;
+      --green: #69d5a0;
+      --red: #ff727d;
+      --radius: 18px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-width: 760px;
+      min-height: 100vh;
+      color: var(--text);
+      background:
+        radial-gradient(800px 440px at 76% -10%, rgba(126,83,255,.12), transparent 70%),
+        var(--bg);
+      font-family: Inter, "Segoe UI", system-ui, sans-serif;
+      font-size: 14px;
+      letter-spacing: .01em;
+    }
+    button, input { font: inherit; }
+    button { color: inherit; }
+    .window-bar {
+      height: 38px; display: flex; align-items: center; justify-content: space-between;
+      padding-left: 14px; background: #15151a; border-bottom: 1px solid var(--stroke);
+      color: #aaa7b4; font-size: 11px; user-select: none;
+    }
+    .window-caption { display: flex; align-items: center; gap: 8px; height: 100%; flex: 1; }
+    .window-caption-mark { color: var(--purple-bright); font-size: 13px; }
+    .window-controls { height: 100%; display: flex; }
+    .window-controls button {
+      width: 45px; height: 100%; border: 0; background: transparent; color: #b8b5c0;
+      font-size: 13px; cursor: pointer;
+    }
+    .window-controls button:hover { background: rgba(255,255,255,.09); }
+    .window-controls button.close:hover { background: #c42b3a; color: white; }
+    .shell { min-height: calc(100vh - 38px); display: grid; grid-template-columns: 230px 1fr; }
+    aside {
+      padding: 27px 17px;
+      border-right: 1px solid var(--stroke);
+      background: rgba(20,20,25,.72);
+      display: flex;
+      flex-direction: column;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; padding: 0 8px 36px; }
+    .brand-mark {
+      width: 38px; height: 38px; display: grid; place-items: center;
+      border-radius: 12px; color: white; font-size: 17px; font-weight: 800;
+      background: linear-gradient(145deg, #ad8dff, #7653e8);
+      box-shadow: 0 8px 24px rgba(126,83,255,.28);
+    }
+    .brand-name { font-size: 18px; font-weight: 750; letter-spacing: -.04em; }
+    .brand-caption { margin-top: 2px; color: var(--muted); font-size: 11px; }
+    .nav-label { padding: 0 11px 10px; color: #6f6d78; font-size: 10px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+    .nav-item {
+      width: 100%; display: flex; align-items: center; gap: 11px; padding: 11px 12px;
+      color: #c9c7d0; border: 0; border-radius: 11px; background: transparent;
+      text-align: left; cursor: default;
+    }
+    .nav-item.active { color: #d9ceff; background: rgba(155,123,255,.13); }
+    .nav-icon { width: 18px; text-align: center; font-size: 16px; }
+    .sidebar-bottom { margin-top: auto; }
+    .tip {
+      padding: 14px; border: 1px solid var(--stroke); border-radius: 14px;
+      background: rgba(255,255,255,.025); color: var(--muted); font-size: 12px; line-height: 1.55;
+    }
+    .tip strong { color: #dedbe7; font-weight: 650; }
+    main { width: min(1220px, 100%); margin: 0 auto; padding: 32px 38px 28px; }
+    .topline { display: flex; align-items: center; justify-content: space-between; margin-bottom: 31px; }
+    .eyebrow { color: var(--purple-bright); font-size: 11px; font-weight: 750; letter-spacing: .13em; text-transform: uppercase; }
+    h1 { margin: 8px 0 0; font-size: 30px; letter-spacing: -.045em; font-weight: 720; }
+    .subtitle { margin-top: 8px; color: var(--muted); font-size: 13px; }
+    .local-pill {
+      display: inline-flex; align-items: center; gap: 8px; padding: 9px 12px;
+      border: 1px solid var(--stroke); border-radius: 999px;
+      background: rgba(255,255,255,.025); color: #c9c7d0; font-size: 11px;
+    }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 12px rgba(105,213,160,.55); }
+    .layout { display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(310px, .88fr); gap: 19px; align-items: start; }
+    .column { display: grid; gap: 18px; }
+    .card {
+      padding: 22px; border: 1px solid var(--stroke); border-radius: var(--radius);
+      background: linear-gradient(145deg, rgba(29,29,36,.96), rgba(24,24,30,.96));
+      box-shadow: 0 12px 36px rgba(0,0,0,.12);
+    }
+    .card-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 19px; }
+    .card-title { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 680; }
+    .step {
+      width: 25px; height: 25px; display: grid; place-items: center; border-radius: 8px;
+      background: rgba(155,123,255,.14); color: var(--purple-bright); font-size: 11px; font-weight: 800;
+    }
+    .card-hint { margin-top: 5px; margin-left: 35px; color: var(--muted); font-size: 11px; line-height: 1.45; }
+    label { display: block; margin-bottom: 8px; color: #c7c5cf; font-size: 12px; font-weight: 600; }
+    .field { margin-bottom: 17px; }
+    .input-wrap { position: relative; }
+    input[type="text"], input[type="password"], input[type="number"] {
+      width: 100%; height: 43px; padding: 0 13px; outline: none;
+      color: var(--text); border: 1px solid rgba(255,255,255,.09); border-radius: 10px;
+      background: #141419; transition: border-color .18s, box-shadow .18s;
+    }
+    input::placeholder { color: #6d6b77; }
+    input:focus { border-color: rgba(155,123,255,.68); box-shadow: 0 0 0 3px rgba(155,123,255,.12); }
+    .field-note { margin-top: 7px; color: #777581; font-size: 10px; }
+    .url-mark { position: absolute; top: 12px; right: 13px; color: #777581; font-size: 11px; }
+    .counter {
+      display: flex; align-items: center; width: max-content; height: 39px;
+      overflow: hidden; border: 1px solid rgba(255,255,255,.09); border-radius: 10px; background: #141419;
+    }
+    .counter button { width: 39px; height: 100%; border: 0; background: transparent; color: #d5d2df; font-size: 18px; cursor: pointer; }
+    .counter button:hover { background: rgba(255,255,255,.06); }
+    .counter input { width: 46px; height: 100%; padding: 0; border: 0; border-radius: 0; background: transparent; text-align: center; font-weight: 700; }
+    input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { appearance: none; margin: 0; }
+    .counter-label { display: flex; align-items: center; gap: 12px; }
+    .counter-caption { color: var(--muted); font-size: 11px; }
+    .duration-control { margin-top: 20px; }
+    .duration-heading { display: flex; justify-content: space-between; margin-bottom: 9px; color: #c7c5cf; font-size: 12px; font-weight: 600; }
+    .duration-heading output { color: var(--purple-bright); font-weight: 700; }
+    input[type="range"] { width: 100%; accent-color: var(--purple); }
+    .duration-range { display: flex; justify-content: space-between; margin-top: 3px; color: #777581; font-size: 10px; }
+    .segmented { display: flex; gap: 4px; padding: 4px; border: 1px solid var(--stroke); border-radius: 11px; background: #141419; }
+    .segmented button {
+      flex: 1; height: 34px; border: 0; border-radius: 8px; background: transparent;
+      color: var(--muted); font-size: 11px; cursor: pointer;
+    }
+    .segmented button.active { color: #e3dcff; background: rgba(155,123,255,.18); }
+    .background-panel { margin-top: 15px; }
+    .browse-row { display: flex; gap: 8px; }
+    .browse-row input { min-width: 0; }
+    .button-secondary {
+      flex: 0 0 auto; height: 43px; padding: 0 12px; border: 1px solid var(--stroke);
+      border-radius: 10px; background: #24232b; color: #d6d3df; font-size: 11px; cursor: pointer;
+    }
+    .button-secondary:hover { background: #2c2b35; }
+    .license-label { display: flex; align-items: center; justify-content: space-between; }
+    .license-label span { color: #777581; font-size: 10px; font-weight: 450; }
+    .actions { display: flex; gap: 10px; margin-top: 20px; }
+    .button-primary, .button-stop {
+      height: 45px; border: 0; border-radius: 11px; font-weight: 700; cursor: pointer;
+      transition: transform .15s, filter .15s, opacity .15s;
+    }
+    .button-primary {
+      flex: 1; color: #fff; background: linear-gradient(100deg, #8b68f4, #a883ff);
+      box-shadow: 0 7px 23px rgba(139,104,244,.2);
+    }
+    .button-primary:hover:not(:disabled) { filter: brightness(1.08); transform: translateY(-1px); }
+    .button-stop { display: none; padding: 0 17px; border: 1px solid rgba(255,114,125,.24); color: #ff9ba3; background: rgba(255,114,125,.09); }
+    .button-stop:hover { background: rgba(255,114,125,.16); }
+    button:disabled { opacity: .48; cursor: not-allowed; }
+    .status-card { min-height: 248px; }
+    .status-top { display: flex; align-items: center; justify-content: space-between; }
+    .status-badge { padding: 6px 9px; border-radius: 999px; color: var(--muted); background: rgba(255,255,255,.05); font-size: 10px; }
+    .status-badge.working { color: #dccfff; background: rgba(155,123,255,.15); }
+    .status-badge.success { color: #a8e8c7; background: rgba(105,213,160,.12); }
+    .status-badge.error { color: #ff9ca4; background: rgba(255,114,125,.12); }
+    .status-message { min-height: 43px; margin: 28px 0 17px; color: #e3e0e9; font-size: 13px; line-height: 1.55; }
+    .progress-track { height: 6px; overflow: hidden; border-radius: 99px; background: #303039; }
+    .progress-value { width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #8662ef, #b49aff); transition: width .35s ease; }
+    .progress-meta { display: flex; justify-content: space-between; margin-top: 9px; color: #7e7b88; font-size: 10px; }
+    .activity-title { display: flex; align-items: center; justify-content: space-between; margin: 24px 0 10px; color: #c9c6d0; font-size: 11px; font-weight: 650; }
+    .activity-list { display: grid; gap: 8px; max-height: 248px; overflow: auto; }
+    .activity-empty { padding: 15px 12px; border: 1px dashed rgba(255,255,255,.1); border-radius: 10px; color: #777581; text-align: center; font-size: 11px; line-height: 1.5; }
+    .activity-item {
+      width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 11px;
+      border: 1px solid var(--stroke); border-radius: 10px; background: rgba(255,255,255,.02);
+      text-align: left; cursor: pointer;
+    }
+    .activity-item:hover { border-color: rgba(155,123,255,.38); background: rgba(155,123,255,.06); }
+    .activity-check { width: 23px; height: 23px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 7px; color: var(--green); background: rgba(105,213,160,.1); }
+    .activity-name { overflow: hidden; color: #d8d5df; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+    .activity-path { margin-top: 3px; overflow: hidden; color: #777581; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+    .output-card { padding: 15px 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .output-info { min-width: 0; }
+    .output-label { color: #85828e; font-size: 10px; }
+    .output-path { margin-top: 5px; overflow: hidden; color: #d2cfda; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+    .output-open { flex: 0 0 auto; padding: 8px 11px; border: 1px solid var(--stroke); border-radius: 9px; background: #24232b; color: #d4d0de; font-size: 10px; cursor: pointer; }
+    .output-open:hover { background: #2c2b35; }
+    .toast {
+      position: fixed; right: 25px; bottom: 23px; max-width: 440px; padding: 13px 16px;
+      border: 1px solid rgba(255,114,125,.22); border-radius: 12px; color: #ffc3c7;
+      background: #292027; box-shadow: 0 14px 40px rgba(0,0,0,.32); opacity: 0;
+      transform: translateY(10px); pointer-events: none; transition: .2s;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast.ok { border-color: rgba(105,213,160,.2); color: #b7eed0; background: #1c2823; }
+    .modal-backdrop {
+      position: fixed; inset: 0; z-index: 5; display: grid; place-items: center;
+      padding: 24px; background: rgba(0,0,0,.66); backdrop-filter: blur(8px);
+    }
+    .modal-backdrop[hidden] { display: none; }
+    .settings-modal {
+      width: min(470px, 100%); padding: 25px; border: 1px solid var(--stroke);
+      border-radius: 18px; background: #1b1a21; box-shadow: 0 24px 80px rgba(0,0,0,.5);
+    }
+    .modal-heading { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 23px; }
+    .modal-heading h2 { margin: 0; font-size: 20px; letter-spacing: -.03em; }
+    .modal-heading p { margin: 7px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+    .modal-close { width: 32px; height: 32px; border: 1px solid var(--stroke); border-radius: 9px; background: #25242c; cursor: pointer; }
+    .settings-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 22px; }
+    .settings-actions button { height: 39px; padding: 0 14px; border: 1px solid var(--stroke); border-radius: 9px; background: #27262e; cursor: pointer; }
+    .settings-actions .save-settings { border: 0; color: white; background: linear-gradient(100deg, #8b68f4, #a883ff); font-weight: 700; }
+    .page[hidden] { display: none; }
+    .page-heading { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
+    .page-heading h2 { margin: 0; font-size: 20px; letter-spacing: -.03em; }
+    .page-heading p { margin: 6px 0 0; color: var(--muted); font-size: 12px; }
+    .page-toolbar { display: flex; gap: 9px; align-items: center; }
+    .page-toolbar input { width: min(300px, 35vw); }
+    .toolbar-button {
+      flex: 0 0 auto; height: 39px; padding: 0 13px; border: 1px solid var(--stroke);
+      border-radius: 10px; background: #24232b; color: #d6d3df; font-size: 11px; cursor: pointer;
+    }
+    .toolbar-button:hover { background: #2c2b35; }
+    .library-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(225px,1fr)); gap: 12px; }
+    .library-card { min-width: 0; padding: 15px; border: 1px solid var(--stroke); border-radius: 13px; background: rgba(255,255,255,.025); }
+    .library-preview { height: 100px; display: grid; place-items: center; border-radius: 9px; background: radial-gradient(circle at 50% 0,rgba(155,123,255,.22),transparent 70%),#131319; color: var(--purple-bright); font-size: 28px; }
+    .library-name { margin-top: 12px; overflow: hidden; color: #e4e1e9; font-size: 12px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+    .library-meta { margin-top: 5px; color: #85828e; font-size: 10px; }
+    .library-actions { display: flex; gap: 8px; margin-top: 13px; }
+    .library-actions button { flex: 1; height: 33px; border: 1px solid var(--stroke); border-radius: 8px; background: #25242c; font-size: 10px; cursor: pointer; }
+    .library-actions button:hover { background: #302e38; }
+    .library-actions .delete-clip { flex: 0 0 38px; color: #ff9ca4; }
+    .stat-row { display: flex; gap: 10px; margin-bottom: 16px; }
+    .stat-chip { padding: 9px 12px; border: 1px solid var(--stroke); border-radius: 10px; color: #c9c6d0; background: rgba(255,255,255,.025); font-size: 11px; }
+    .history-list { display: grid; gap: 9px; }
+    .history-item { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 12px; padding: 14px; border: 1px solid var(--stroke); border-radius: 11px; background: rgba(255,255,255,.02); }
+    .history-source { overflow: hidden; color: #e2dfe8; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+    .history-time { margin-top: 5px; color: #85828e; font-size: 10px; }
+    .history-status { align-self: center; color: #a8e8c7; font-size: 11px; text-align: right; }
+    .history-status.error { color: #ff9ca4; }
+    .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .settings-description { margin: 0 0 18px; color: var(--muted); font-size: 11px; line-height: 1.55; }
+    .diagnostic-list { display: grid; gap: 8px; }
+    .diagnostic-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px; border: 1px solid var(--stroke); border-radius: 9px; background: rgba(255,255,255,.02); }
+    .diagnostic-name { font-size: 11px; }
+    .diagnostic-state { color: #ff9ca4; font-size: 10px; }
+    .diagnostic-state.ok { color: #a8e8c7; }
+    .diagnostic-path { max-width: 62%; overflow: hidden; color: #777581; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+    @media (max-width: 940px) {
+      main { padding: 26px 24px; }
+      .shell { grid-template-columns: 190px 1fr; }
+      aside { padding: 22px 12px; }
+      .layout { grid-template-columns: 1fr; }
+      .status-card { min-height: auto; }
+      .settings-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="window-bar" id="windowBar">
+    <div class="window-caption"><span class="window-caption-mark">✦</span><span>Clipper Studio</span></div>
+    <div class="window-controls">
+      <button id="minimizeWindow" aria-label="Свернуть" title="Свернуть">─</button>
+      <button id="maximizeWindow" aria-label="Развернуть" title="Развернуть">□</button>
+      <button id="closeWindow" class="close" aria-label="Закрыть" title="Закрыть">×</button>
+    </div>
+  </div>
+  <div class="shell">
+    <aside>
+      <div class="brand">
+        <div class="brand-mark">C</div>
+        <div><div class="brand-name">clipper</div><div class="brand-caption">видео в короткий формат</div></div>
+      </div>
+      <div class="nav-label">Рабочее пространство</div>
+      <button id="createNav" class="nav-item active" type="button"><span class="nav-icon">✦</span>Создать клипы</button>
+      <button id="libraryNav" class="nav-item" type="button"><span class="nav-icon">▤</span>Мои клипы</button>
+      <button id="historyNav" class="nav-item" type="button"><span class="nav-icon">◷</span>История</button>
+      <button id="settingsNav" class="nav-item" type="button"><span class="nav-icon">⚙</span>Настройки</button>
+      <div class="sidebar-bottom">
+        <div class="tip"><strong>Совет</strong><br>Для игрового фона выбери видео с динамичной картинкой — Clipper случайно использует разные его фрагменты.</div>
+      </div>
+    </aside>
+    <main>
+      <div class="topline" id="topline">
+        <div>
+          <div class="eyebrow">Clipper Studio</div>
+          <h1>Создать клипы</h1>
+          <div class="subtitle">Найди яркие моменты и преврати их в вертикальные видео с субтитрами.</div>
+        </div>
+        <div class="local-pill"><span class="dot"></span>Обработка на этом компьютере</div>
+      </div>
+      <div id="createPage" class="page">
+      <div class="layout">
+        <div class="column">
+          <section class="card">
+            <div class="card-head">
+              <div>
+                <div class="card-title"><span class="step">01</span>Исходное видео</div>
+                <div class="card-hint">Вставь ссылку на YouTube-видео, из которого нужно нарезать моменты.</div>
+              </div>
+            </div>
+            <div class="field">
+              <label for="sourceUrl">Ссылка на видео</label>
+              <div class="input-wrap">
+                <input id="sourceUrl" type="text" placeholder="https://youtube.com/watch?v=…" autocomplete="off">
+                <span class="url-mark">URL</span>
+              </div>
+            </div>
+            <div class="counter-label">
+              <div class="counter">
+                <button id="countDown" aria-label="Уменьшить количество">−</button>
+                <input id="clipCount" type="number" min="1" max="20" value="3">
+                <button id="countUp" aria-label="Увеличить количество">+</button>
+              </div>
+              <div><div style="font-size:12px;font-weight:650">Количество клипов</div><div class="counter-caption">Можно создать до 20 за один запуск</div></div>
+            </div>
+            <div class="duration-control">
+              <div class="duration-heading"><label for="clipDuration" style="margin:0">Длительность клипа</label><output id="durationValue" for="clipDuration">45 сек</output></div>
+              <input id="clipDuration" type="range" min="15" max="90" step="5" value="45">
+              <div class="duration-range"><span>15 сек</span><span>90 сек</span></div>
+            </div>
+          </section>
+          <section class="card">
+            <div class="card-head">
+              <div>
+                <div class="card-title"><span class="step">02</span>Фоновое видео</div>
+                <div class="card-hint">Фон будет показан в нижней части вертикального ролика.</div>
+              </div>
+            </div>
+            <div class="segmented">
+              <button id="localMode" class="active" type="button">Файл на компьютере</button>
+              <button id="urlMode" type="button">Ссылка на видео</button>
+            </div>
+            <div class="background-panel" id="localPanel">
+              <label for="gameplayPath">Видео для фона</label>
+              <div class="browse-row">
+                <input id="gameplayPath" type="text" placeholder="Выбери MP4, MOV, MKV или WebM">
+                <button id="browseButton" class="button-secondary" type="button">Обзор</button>
+              </div>
+              <div class="field-note">Путь к выбранному видео сохранится для следующего запуска.</div>
+            </div>
+            <div class="background-panel" id="urlPanel" style="display:none">
+              <label for="gameplayUrl">Ссылка на видео для фона</label>
+              <input id="gameplayUrl" type="text" placeholder="https://youtube.com/watch?v=…" autocomplete="off">
+              <div class="field-note">Если скачивание не удастся, можно автоматически использовать локальный файл.</div>
+            </div>
+          </section>
+          <section class="card">
+            <div class="card-head" style="margin-bottom:14px">
+              <div>
+                <div class="card-title"><span class="step">03</span>Формат результата</div>
+                <div class="card-hint">Готовые ролики оптимизированы для Shorts, Reels и TikTok.</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <span class="local-pill">Вертикальный 9:16</span>
+              <span class="local-pill">1080 × 1920</span>
+              <span class="local-pill">Субтитры по словам</span>
+            </div>
+            <div class="actions">
+              <button id="startButton" class="button-primary" type="button">✦ &nbsp; Создать клипы</button>
+              <button id="stopButton" class="button-stop" type="button">Остановить</button>
+            </div>
+          </section>
+        </div>
+        <div class="column">
+          <section class="card status-card">
+            <div class="status-top">
+              <div class="card-title"><span class="step">↗</span>Прогресс</div>
+              <span id="statusBadge" class="status-badge">Ожидание</span>
+            </div>
+            <div id="statusMessage" class="status-message">Добавь ссылку на видео и выбери фон — Clipper подготовит вертикальные ролики с субтитрами.</div>
+            <div class="progress-track"><div id="progressValue" class="progress-value"></div></div>
+            <div class="progress-meta"><span id="progressLabel">Готов к работе</span><span id="progressPercent">0%</span></div>
+            <div class="activity-title"><span>Результаты</span><span id="resultCount">0</span></div>
+            <div id="activityList" class="activity-list">
+              <div id="emptyState" class="activity-empty">Готовые клипы появятся здесь.<br>Они также сохраняются в папку результата.</div>
+            </div>
+          </section>
+          <section class="card output-card">
+            <div class="output-info"><div class="output-label">Папка с готовыми клипами</div><div id="outputPath" class="output-path">Загрузка…</div></div>
+            <button id="openFolder" class="output-open" type="button">Открыть папку ↗</button>
+          </section>
+        </div>
+      </div>
+      </div>
+      <section id="libraryPage" class="page" hidden>
+        <div class="card">
+          <div class="page-heading">
+            <div><h2>Мои клипы</h2><p>Все готовые видео в папке результатов. Нажми «Открыть», чтобы перейти к файлу.</p></div>
+            <div class="page-toolbar">
+              <input id="librarySearch" type="text" placeholder="Поиск по имени клипа" aria-label="Поиск по имени клипа">
+              <button id="refreshLibrary" class="toolbar-button" type="button">Обновить</button>
+            </div>
+          </div>
+          <div class="stat-row"><div id="libraryCount" class="stat-chip">0 клипов</div><div id="librarySize" class="stat-chip">0 МБ</div></div>
+          <div id="libraryGrid" class="library-grid"><div class="activity-empty">Загружаю библиотеку…</div></div>
+        </div>
+      </section>
+      <section id="historyPage" class="page" hidden>
+        <div class="card">
+          <div class="page-heading">
+            <div><h2>История обработок</h2><p>Последние запуски Clipper и их результат. История хранится на этом компьютере.</p></div>
+            <button id="refreshHistory" class="toolbar-button" type="button">Обновить</button>
+          </div>
+          <div id="historyList" class="history-list"><div class="activity-empty">Загружаю историю…</div></div>
+        </div>
+      </section>
+      <section id="settingsPage" class="page" hidden>
+        <div class="settings-grid">
+          <section class="card">
+            <div class="card-head" style="margin-bottom:14px">
+              <div><div class="card-title"><span class="step">⚙</span>Доступ к Clipper</div><div class="card-hint">Ключ нужен для лицензии и лимита клипов.</div></div>
+            </div>
+            <div class="field">
+              <div class="license-label"><label for="settingsLicenseKey">Ключ доступа</label><span id="licenseQuota">не сохранён</span></div>
+              <input id="settingsLicenseKey" type="password" placeholder="Введи ключ лицензии" autocomplete="off">
+              <div class="field-note">Ключ защищён DPAPI Windows и доступен только вашей учётной записи.</div>
+            </div>
+            <div class="settings-actions"><button id="settingsSave" class="save-settings" type="button">Сохранить ключ</button></div>
+          </section>
+          <section class="card">
+            <div class="card-head" style="margin-bottom:14px">
+              <div><div class="card-title"><span class="step">✓</span>Проверка компонентов</div><div class="card-hint">Проверь, готовы ли программы для обработки видео.</div></div>
+            </div>
+            <div id="diagnosticsList" class="diagnostic-list"><div class="field-note">Нажми кнопку, чтобы проверить.</div></div>
+            <div class="settings-actions"><button id="checkTools" type="button">Проверить сейчас</button></div>
+          </section>
+          <section class="card">
+            <div class="card-head" style="margin-bottom:14px">
+              <div><div class="card-title"><span class="step">↗</span>Папка результатов</div><div class="card-hint">Здесь хранятся все готовые ролики.</div></div>
+            </div>
+            <div id="settingsOutputPath" class="output-path" style="white-space:normal;overflow-wrap:anywhere">Загрузка…</div>
+            <div class="settings-actions"><button id="settingsOpenFolder" type="button">Открыть папку</button></div>
+          </section>
+          <section class="card">
+            <div class="card-head" style="margin-bottom:14px">
+              <div><div class="card-title"><span class="step">i</span>О Clipper</div><div class="card-hint">Вертикальные клипы с субтитрами, локальной обработкой и историей.</div></div>
+            </div>
+            <p class="settings-description">Clipper использует Whisper для распознавания речи, FFmpeg для монтажа и yt-dlp для загрузки видео. Настройки, библиотека и история не передаются в облако.</p>
+          </section>
+        </div>
+      </section>
+    </main>
+  </div>
+  <div id="toast" class="toast"></div>
+  <script>
+    const byId = id => document.getElementById(id);
+    let busy = false;
+    let outputFolder = "";
+    let currentCount = 0;
+    let toastTimer;
+    let libraryRecords = [];
+
+    function notify(message, success = false) {
+      const toast = byId("toast");
+      toast.textContent = message;
+      toast.className = `toast show${success ? " ok" : ""}`;
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove("show"), 4200);
+    }
+
+    function setMode(mode) {
+      const local = mode === "local";
+      byId("localMode").classList.toggle("active", local);
+      byId("urlMode").classList.toggle("active", !local);
+      byId("localPanel").style.display = local ? "" : "none";
+      byId("urlPanel").style.display = local ? "none" : "";
+    }
+
+    function setBusy(value) {
+      busy = value;
+      byId("startButton").disabled = value;
+      byId("stopButton").style.display = value ? "block" : "none";
+      byId("statusBadge").textContent = value ? "В работе" : "Ожидание";
+      byId("statusBadge").className = `status-badge${value ? " working" : ""}`;
+    }
+
+    function addResult(event) {
+      byId("emptyState")?.remove();
+      const row = document.createElement("button");
+      row.className = "activity-item";
+      row.type = "button";
+      row.title = "Открыть клип";
+      row.addEventListener("click", async () => {
+        try { await window.openClipFile(event.file); }
+        catch (error) { notify(String(error).replace(/^Error:\s*/, "")); }
+      });
+      const check = document.createElement("div");
+      check.className = "activity-check";
+      check.textContent = "✓";
+      const info = document.createElement("div");
+      info.style.minWidth = "0";
+      const name = document.createElement("div");
+      name.className = "activity-name";
+      name.textContent = event.file ? event.file.split(/[\\/]/).pop() : event.message;
+      const path = document.createElement("div");
+      path.className = "activity-path";
+      path.textContent = event.file || "";
+      info.append(name, path);
+      row.append(check, info);
+      byId("activityList").prepend(row);
+      currentCount++;
+      byId("resultCount").textContent = String(currentCount);
+      if (!byId("libraryPage").hidden) loadLibrary();
+    }
+
+    function formatFileSize(bytes) {
+      if (!bytes) return "0 Б";
+      const units = ["Б", "КБ", "МБ", "ГБ"];
+      const level = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+      return `${(bytes / Math.pow(1024, level)).toFixed(level ? 1 : 0)} ${units[level]}`;
+    }
+
+    function showPage(name) {
+      const pageTitles = {
+        create: ["Создать клипы", "Найди яркие моменты и преврати их в вертикальные видео с субтитрами."],
+        library: ["Мои клипы", "Готовые ролики и файлы, которые ты уже создал."],
+        history: ["История", "Результаты предыдущих запусков Clipper."],
+        settings: ["Настройки", "Ключ доступа, папка результатов и состояние компонентов."]
+      };
+      for (const page of ["create", "library", "history", "settings"]) {
+        byId(`${page}Page`).hidden = page !== name;
+        byId(`${page}Nav`).classList.toggle("active", page === name);
+      }
+      byId("topline").querySelector("h1").textContent = pageTitles[name][0];
+      byId("topline").querySelector(".subtitle").textContent = pageTitles[name][1];
+      if (name === "library") loadLibrary();
+      if (name === "history") loadHistory();
+    }
+
+    async function loadLibrary() {
+      if (typeof window.getClipLibrary !== "function") return;
+      try {
+        libraryRecords = JSON.parse(await window.getClipLibrary());
+        renderLibrary();
+      } catch (error) {
+        byId("libraryGrid").innerHTML = "";
+        const message = document.createElement("div");
+        message.className = "activity-empty";
+        message.textContent = `Не удалось загрузить библиотеку: ${String(error).replace(/^Error:\s*/, "")}`;
+        byId("libraryGrid").append(message);
+      }
+    }
+
+    function renderLibrary() {
+      const query = byId("librarySearch").value.trim().toLocaleLowerCase();
+      const clips = libraryRecords.filter(clip => clip.name.toLocaleLowerCase().includes(query));
+      byId("libraryCount").textContent = `${libraryRecords.length} ${libraryRecords.length === 1 ? "клип" : "клипов"}`;
+      byId("librarySize").textContent = formatFileSize(libraryRecords.reduce((sum, clip) => sum + clip.size, 0));
+      const grid = byId("libraryGrid");
+      grid.replaceChildren();
+      if (!clips.length) {
+        const empty = document.createElement("div");
+        empty.className = "activity-empty";
+        empty.textContent = libraryRecords.length ? "По этому запросу клипов не найдено." : "Пока нет готовых клипов. Созданные ролики появятся здесь.";
+        grid.append(empty);
+        return;
+      }
+      for (const clip of clips) {
+        const card = document.createElement("article");
+        card.className = "library-card";
+        const preview = document.createElement("div");
+        preview.className = "library-preview";
+        preview.textContent = "▶";
+        const name = document.createElement("div");
+        name.className = "library-name";
+        name.title = clip.name;
+        name.textContent = clip.name;
+        const metadata = document.createElement("div");
+        metadata.className = "library-meta";
+        metadata.textContent = `${formatFileSize(clip.size)} · изменён ${new Date(clip.modifiedAt).toLocaleString("ru-RU")}`;
+        const actions = document.createElement("div");
+        actions.className = "library-actions";
+        const open = document.createElement("button");
+        open.type = "button";
+        open.textContent = "Открыть";
+        open.addEventListener("click", () => openClip(clip.path));
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "delete-clip";
+        remove.title = "Удалить клип";
+        remove.setAttribute("aria-label", `Удалить ${clip.name}`);
+        remove.textContent = "×";
+        remove.addEventListener("click", () => deleteClip(clip));
+        actions.append(open, remove);
+        card.append(preview, name, metadata, actions);
+        grid.append(card);
+      }
+    }
+
+    async function openClip(path) {
+      try { await window.openClipFile(path); }
+      catch (error) { notify(String(error).replace(/^Error:\s*/, "")); }
+    }
+
+    async function deleteClip(clip) {
+      if (!window.confirm(`Удалить ${clip.name}? Это действие нельзя отменить.`)) return;
+      try {
+        await window.deleteClipFile(clip.path);
+        notify(`${clip.name} удалён.`, true);
+        await loadLibrary();
+      } catch (error) {
+        notify(String(error).replace(/^Error:\s*/, ""));
+      }
+    }
+
+    async function loadHistory() {
+      if (typeof window.getJobHistory !== "function") return;
+      try {
+        const records = JSON.parse(await window.getJobHistory());
+        const list = byId("historyList");
+        list.replaceChildren();
+        if (!records.length) {
+          const empty = document.createElement("div");
+          empty.className = "activity-empty";
+          empty.textContent = "История пока пуста. Она будет пополняться после запуска обработки.";
+          list.append(empty);
+          return;
+        }
+        for (const record of records) {
+          const row = document.createElement("article");
+          row.className = "history-item";
+          const info = document.createElement("div");
+          const source = document.createElement("div");
+          source.className = "history-source";
+          source.title = record.source;
+          source.textContent = record.source;
+          const date = document.createElement("div");
+          date.className = "history-time";
+          date.textContent = new Date(record.startedAt).toLocaleString("ru-RU");
+          const details = document.createElement("div");
+          details.className = "history-time";
+          details.textContent = `${record.createdClips || 0} из ${record.requestedClips} клипов${record.details ? ` · ${record.details}` : ""}`;
+          info.append(source, date, details);
+          const status = document.createElement("div");
+          status.className = `history-status${record.status === "Ошибка" ? " error" : ""}`;
+          status.textContent = record.status;
+          row.append(info, status);
+          list.append(row);
+        }
+      } catch (error) {
+        byId("historyList").textContent = `Не удалось загрузить историю: ${String(error).replace(/^Error:\s*/, "")}`;
+      }
+    }
+
+    window.onClipperEvent = event => {
+      if (event.remaining !== undefined && event.remaining !== null) {
+        byId("licenseQuota").textContent = `Осталось клипов: ${event.remaining}`;
+      }
+      if (event.type === "license" && (event.remaining === undefined || event.remaining === null)) {
+        byId("licenseQuota").textContent = "Безлимит";
+      }
+      byId("statusMessage").textContent = event.message || "";
+      if (event.type === "started") {
+        currentCount = 0;
+        byId("activityList").innerHTML = '<div id="emptyState" class="activity-empty">Обработка запущена…</div>';
+        byId("resultCount").textContent = "0";
+        byId("progressValue").style.width = "4%";
+        byId("progressPercent").textContent = "…";
+        byId("progressLabel").textContent = "Подготовка";
+        setBusy(true);
+      } else if (event.type === "progress") {
+        if (event.total > 0 && event.current > 0) {
+          const percent = Math.min(98, Math.round(event.current / event.total * 100));
+          byId("progressValue").style.width = `${percent}%`;
+          byId("progressPercent").textContent = `${percent}%`;
+          byId("progressLabel").textContent = `Клип ${event.current} из ${event.total}`;
+        }
+      } else if (event.type === "clip") {
+        addResult(event);
+      } else if (event.type === "warning") {
+        notify(event.message || "Не удалось обработать один из моментов.");
+      } else if (event.type === "complete") {
+        setBusy(false);
+        byId("statusBadge").textContent = "Готово";
+        byId("statusBadge").className = "status-badge success";
+        byId("progressValue").style.width = "100%";
+        byId("progressPercent").textContent = "100%";
+        byId("progressLabel").textContent = "Обработка завершена";
+        notify(event.message, true);
+        if (!byId("historyPage").hidden) loadHistory();
+      } else if (event.type === "settings-saved") {
+        byId("licenseQuota").textContent = byId("settingsLicenseKey").value.trim() ? "ключ сохранён" : "не сохранён";
+        notify(event.message, true);
+      } else if (event.type === "stopped" || event.type === "error") {
+        setBusy(false);
+        byId("statusBadge").textContent = event.type === "error" ? "Ошибка" : "Остановлено";
+        byId("statusBadge").className = `status-badge${event.type === "error" ? " error" : ""}`;
+        byId("progressLabel").textContent = event.type === "error" ? "Нужна проверка" : "Остановлено";
+        notify(event.message || "Обработка остановлена.");
+        if (!byId("historyPage").hidden) loadHistory();
+      } else if (event.type === "diagnostics") {
+        renderDiagnostics(event.items);
+      }
+    };
+
+    byId("countDown").addEventListener("click", () => {
+      byId("clipCount").value = Math.max(1, Number(byId("clipCount").value || 1) - 1);
+    });
+    byId("countUp").addEventListener("click", () => {
+      byId("clipCount").value = Math.min(20, Number(byId("clipCount").value || 1) + 1);
+    });
+    byId("clipCount").addEventListener("change", () => {
+      byId("clipCount").value = Math.max(1, Math.min(20, Number(byId("clipCount").value || 1)));
+    });
+    byId("clipDuration").addEventListener("input", () => {
+      byId("durationValue").textContent = `${byId("clipDuration").value} сек`;
+    });
+    byId("localMode").addEventListener("click", () => setMode("local"));
+    byId("urlMode").addEventListener("click", () => setMode("url"));
+
+    byId("browseButton").addEventListener("click", async () => {
+      try {
+        const path = await window.chooseGameplayFile();
+        if (path) byId("gameplayPath").value = path;
+      } catch (error) {
+        notify(String(error));
+      }
+    });
+
+    byId("startButton").addEventListener("click", async () => {
+      if (busy) return;
+      const isLocal = byId("localMode").classList.contains("active");
+      const request = {
+        url: byId("sourceUrl").value.trim(),
+        clipCount: Number(byId("clipCount").value),
+        clipDuration: Number(byId("clipDuration").value),
+        gameplayPath: byId("gameplayPath").value.trim(),
+        gameplayUrl: isLocal ? "" : byId("gameplayUrl").value.trim()
+      };
+      try {
+        await window.startClipping(JSON.stringify(request));
+      } catch (error) {
+        notify(String(error).replace(/^Error:\s*/, ""));
+      }
+    });
+
+    byId("stopButton").addEventListener("click", async () => {
+      try { await window.stopClipping(); }
+      catch (error) { notify(String(error).replace(/^Error:\s*/, "")); }
+    });
+
+    byId("openFolder").addEventListener("click", async () => {
+      try { await window.openOutputFolder(); }
+      catch (error) { notify(String(error).replace(/^Error:\s*/, "")); }
+    });
+    byId("createNav").addEventListener("click", () => showPage("create"));
+    byId("libraryNav").addEventListener("click", () => showPage("library"));
+    byId("historyNav").addEventListener("click", () => showPage("history"));
+    byId("settingsNav").addEventListener("click", () => showPage("settings"));
+    byId("librarySearch").addEventListener("input", renderLibrary);
+    byId("refreshLibrary").addEventListener("click", loadLibrary);
+    byId("refreshHistory").addEventListener("click", loadHistory);
+    byId("settingsOpenFolder").addEventListener("click", async () => {
+      try { await window.openOutputFolder(); }
+      catch (error) { notify(String(error).replace(/^Error:\s*/, "")); }
+    });
+    byId("checkTools").addEventListener("click", async () => {
+      byId("diagnosticsList").textContent = "Проверяю…";
+      try {
+        const items = JSON.parse(await window.getDiagnostics());
+        renderDiagnostics(items);
+      } catch (error) {
+        byId("diagnosticsList").textContent = `Не удалось выполнить проверку: ${String(error).replace(/^Error:\s*/, "")}`;
+      }
+    });
+    function renderDiagnostics(items) {
+      const list = byId("diagnosticsList");
+      list.replaceChildren();
+      for (const item of items || []) {
+        const row = document.createElement("div");
+        row.className = "diagnostic-row";
+        const name = document.createElement("span");
+        name.className = "diagnostic-name";
+        name.textContent = item.name;
+        const path = document.createElement("span");
+        path.className = "diagnostic-path";
+        path.textContent = item.path || "";
+        const state = document.createElement("span");
+        state.className = `diagnostic-state${item.available ? " ok" : ""}`;
+        state.textContent = item.available ? "Готово" : "Не найдено";
+        row.append(name, path, state);
+        list.append(row);
+      }
+    }
+    byId("settingsSave").addEventListener("click", async () => {
+      byId("settingsSave").disabled = true;
+      try {
+        await window.saveSettings(JSON.stringify({licenseKey: byId("settingsLicenseKey").value.trim()}));
+      } catch (error) {
+        notify(String(error).replace(/^Error:\s*/, ""));
+      } finally {
+        byId("settingsSave").disabled = false;
+      }
+    });
+
+    byId("windowBar").addEventListener("mousedown", event => {
+      if (event.button !== 0 || event.target.closest(".window-controls")) return;
+      window.beginWindowDrag().catch(error => notify(String(error)));
+    });
+    byId("windowBar").addEventListener("dblclick", event => {
+      if (!event.target.closest(".window-controls")) window.toggleMaximizeWindow();
+    });
+    byId("minimizeWindow").addEventListener("click", () => window.minimizeWindow());
+    byId("maximizeWindow").addEventListener("click", () => window.toggleMaximizeWindow());
+    byId("closeWindow").addEventListener("click", () => window.closeWindow());
+
+    (async () => {
+      if (typeof window.getAppState !== "function") return;
+      try {
+        const state = JSON.parse(await window.getAppState());
+        outputFolder = state.workDir;
+        byId("outputPath").textContent = outputFolder;
+        byId("settingsOutputPath").textContent = outputFolder;
+        byId("gameplayPath").value = state.gameplayPath || "";
+        byId("gameplayUrl").value = state.gameplayUrl || "";
+        byId("settingsLicenseKey").value = state.licenseKey || "";
+        byId("licenseQuota").textContent = state.licenseKey ? "ключ сохранён" : "не сохранён";
+        byId("clipCount").value = state.clipCount || 3;
+        byId("clipDuration").value = state.clipDuration || 45;
+        byId("durationValue").textContent = `${byId("clipDuration").value} сек`;
+        setMode(state.gameplayUrl ? "url" : "local");
+      } catch (error) {
+        notify("Не удалось загрузить настройки приложения: " + error);
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+/Clipper.exe
+/main.exe
+/release/
+*.mp4
+*.part
+*.ytdl
+*.tmp
+*.bak
+error.log

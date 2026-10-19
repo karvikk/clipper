@@ -9,7 +9,19 @@ $lines = foreach ($name in $files) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         throw "Release file is missing: $path"
     }
-    $digest = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+    $sha256 = [Security.Cryptography.SHA256]::Create()
+    try {
+        $stream = [IO.File]::OpenRead($path)
+        try {
+            $digest = [BitConverter]::ToString($sha256.ComputeHash($stream)).Replace('-', '').ToLowerInvariant()
+        }
+        finally {
+            $stream.Dispose()
+        }
+    }
+    finally {
+        $sha256.Dispose()
+    }
     if ($digest -notmatch '^[0-9a-f]{64}$') {
         throw "Could not calculate a valid SHA-256 for $name"
     }

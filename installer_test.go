@@ -110,6 +110,28 @@ func TestFindWhisperModelPrefersQuantizedModel(t *testing.T) {
 	}
 }
 
+func TestWhisperComponentsRejectMissingOrIncompleteFiles(t *testing.T) {
+	directory := t.TempDir()
+	missing := filepath.Join(directory, "missing.exe")
+	if validWhisperExecutable(missing) {
+		t.Fatal("missing Whisper executable was accepted")
+	}
+	shortExecutable := filepath.Join(directory, "whisper-cli.exe")
+	if err := os.WriteFile(shortExecutable, []byte("incomplete"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if validWhisperExecutable(shortExecutable) {
+		t.Fatal("incomplete Whisper executable was accepted")
+	}
+	shortModel := filepath.Join(directory, "ggml-small-q5_1.bin")
+	if err := os.WriteFile(shortModel, []byte("incomplete"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if validInstalledWhisperModel(shortModel) {
+		t.Fatal("incomplete Whisper model was accepted")
+	}
+}
+
 func TestFFmpegVersionComparison(t *testing.T) {
 	if !versionGreater(ffmpegVersion("ffmpeg-n10.1-latest-win64-gpl-shared.zip"), ffmpegVersion("ffmpeg-n9.0-latest-win64-gpl-shared.zip")) {
 		t.Fatal("FFmpeg version sorting must compare numeric version components")

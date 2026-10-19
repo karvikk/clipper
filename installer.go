@@ -26,6 +26,7 @@ import (
 	"unicode/utf16"
 
 	webview2 "github.com/jchv/go-webview2"
+	"golang.org/x/sys/windows/registry"
 )
 
 //go:embed installer.html
@@ -37,6 +38,7 @@ const (
 	whisperModelURL   = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q5_1.bin"
 	whisperModelSHA   = "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb"
 	whisperModelSize  = int64(190085487)
+	webView2SetupURL  = "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
 )
 
 type installerAsset struct {
@@ -79,6 +81,11 @@ func isSetupExecutable() bool {
 }
 
 func runInstaller() error {
+	runtimeCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	if err := ensureWebView2Runtime(runtimeCtx); err != nil {
+		return fmt.Errorf("не удалось подготовить Microsoft Edge WebView2 Runtime: %w", err)
+	}
 	window := webview2.NewWithOptions(webview2.WebViewOptions{
 		Debug:     false,
 		AutoFocus: true,
@@ -90,7 +97,7 @@ func runInstaller() error {
 		},
 	})
 	if window == nil {
-		return errors.New("не удалось открыть установщик. Запустите ClipperSetup.bat, чтобы установить Microsoft Edge WebView2 Runtime.")
+		return errors.New("не удалось открыть окно установщика. Проверьте, установлен ли Microsoft Edge WebView2 Runtime, и перезапустите ClipperSetup.exe.")
 	}
 	defer window.Destroy()
 
@@ -120,6 +127,105 @@ func runInstaller() error {
 	window.SetHtml(installerHTML)
 	window.Run()
 	return nil
+}
+
+func ensureWebView2Runtime(ctx context.Context) error {
+	if hasWebView2Runtime() {
+		return nil
+	}
+	tempDir, err := os.MkdirTemp("", "clipper-webview2-*")
+	if err != nil {
+		return fmt.Errorf("не удалось создать временную папку: %w", err)
+	}
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			log.Printf("Не удалось очистить временный установщик WebView2 %q: %v", tempDir, err)
+		}
+	}()
+	setupPath := filepath.Join(tempDir, "MicrosoftEdgeWebView2Setup.exe")
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, webView2SetupURL, nil)
+	if err != nil {
+		return err
+	}
+	request.Header.Set("User-Agent", "Clipper-Setup")
+	response, err := installerHTTPClient.Do(request)
+	if err != nil {
+		return fmt.Errorf("не удалось скачать установщик WebView2: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("сервер Microsoft ответил HTTP %d", response.StatusCode)
+	}
+	file, err := os.OpenFile(setupPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o700)
+	if err != nil {
+		return fmt.Errorf("не удалось сохранить установщик WebView2: %w", err)
+	}
+	written, copyErr := io.Copy(file, io.LimitReader(response.Body, 32<<20))
+	closeErr := file.Close()
+	if copyErr != nil {
+		return fmt.Errorf("не удалось скачать установщик WebView2: %w", copyErr)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("не удалось сохранить установщик WebView2: %w", closeErr)
+	}
+	if written < 1024 || written >= 32<<20 {
+		return fmt.Errorf("получен некорректный установщик WebView2 (%d байт)", written)
+	}
+	script := "$ErrorActionPreference = 'Stop'; " +
+		"$setup = " + quotePowerShell(setupPath) + "; " +
+		"$signature = Get-AuthenticodeSignature -LiteralPath $setup; " +
+		"if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'Microsoft') { throw 'Подпись Microsoft у установщика WebView2 недействительна.' }; " +
+		"$process = Start-Process -FilePath $setup -ArgumentList '/silent','/install' -Wait -PassThru; " +
+		"if ($process.ExitCode -ne 0 -and $process.ExitCode -ne 3010) { throw \"Установщик WebView2 завершился с кодом $($process.ExitCode).\" }"
+	command := exec.CommandContext(ctx, "powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encodePowerShell(script))
+	hideConsoleWindow(command)
+	output, err := command.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("проверка или установка WebView2 не удалась: %w: %s", err, strings.TrimSpace(string(output)))
+	}
+	if !hasWebView2Runtime() {
+		return errors.New("установщик завершился, но Microsoft Edge WebView2 Runtime не обнаружен")
+	}
+	return nil
+}
+
+func hasWebView2Runtime() bool {
+	roots := []struct {
+		root registry.Key
+		view uint32
+	}{
+		{registry.LOCAL_MACHINE, registry.WOW64_64KEY},
+		{registry.LOCAL_MACHINE, registry.WOW64_32KEY},
+		{registry.CURRENT_USER, registry.WOW64_64KEY},
+		{registry.CURRENT_USER, registry.WOW64_32KEY},
+	}
+	const clientsPath = `SOFTWARE\Microsoft\EdgeUpdate\Clients`
+	for _, location := range roots {
+		clients, err := registry.OpenKey(location.root, clientsPath, registry.READ|location.view)
+		if err != nil {
+			continue
+		}
+		names, err := clients.ReadSubKeyNames(-1)
+		_ = clients.Close()
+		if err != nil {
+			continue
+		}
+		for _, name := range names {
+			client, err := registry.OpenKey(location.root, clientsPath+`\`+name, registry.QUERY_VALUE|location.view)
+			if err != nil {
+				continue
+			}
+			displayName, _, nameErr := client.GetStringValue("name")
+			version, _, versionErr := client.GetStringValue("pv")
+			_ = client.Close()
+			if nameErr == nil && versionErr == nil &&
+				strings.Contains(strings.ToLower(displayName), "webview2") &&
+				version != "" && version != "0.0.0.0" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (a *installerApp) startInstall() error {
@@ -301,6 +407,116 @@ func installClipper(ctx context.Context, progress func(string, float64)) error {
 	}
 	progress("Установка завершена.", 100)
 	return nil
+}
+
+func ensureWhisperComponents(ctx context.Context, progress func(string, float64)) error {
+	appDir, err := executableDir()
+	if err != nil {
+		return err
+	}
+	whisperPath := findTool(appDir, []string{"whisper-cli.exe", "whisper-cli", "main.exe"}, []string{"whisper-cli.exe", "whisper-cli", "main.exe"})
+	whisperValid := validWhisperExecutable(whisperPath)
+	modelPath := findWhisperModel(appDir)
+	modelValid := modelPath != "" && validInstalledWhisperModel(modelPath)
+	if whisperValid && modelValid {
+		return nil
+	}
+
+	assets := make([]installerAsset, 0, 2)
+	if !whisperValid {
+		assets = append(assets, installerAsset{name: "whisper.zip", url: whisperArchiveURL, hash: whisperArchiveSHA})
+	}
+	if !modelValid {
+		assets = append(assets, installerAsset{
+			name: "ggml-small-q5_1.bin", url: whisperModelURL, hash: whisperModelSHA, size: whisperModelSize,
+		})
+	}
+	tempDir, err := os.MkdirTemp("", "clipper-whisper-repair-*")
+	if err != nil {
+		return fmt.Errorf("не удалось создать временную папку для Whisper: %w", err)
+	}
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			log.Printf("Не удалось очистить временные файлы Whisper %q: %v", tempDir, err)
+		}
+	}()
+	toolsStage := filepath.Join(tempDir, "tools")
+	if err := os.MkdirAll(toolsStage, 0o700); err != nil {
+		return fmt.Errorf("не удалось подготовить восстановление Whisper: %w", err)
+	}
+	for index, asset := range assets {
+		progress(fmt.Sprintf("Скачиваю компонент Whisper: %s…", asset.name), float64(index)/float64(len(assets))*70)
+		destination := filepath.Join(tempDir, asset.name)
+		err := downloadVerified(ctx, asset, destination, func(received, total int64) {
+			fraction := float64(0)
+			if total > 0 {
+				fraction = float64(received) / float64(total)
+			}
+			progress(fmt.Sprintf("Скачиваю Whisper (%s)…", formatBytes(received)), (float64(index)+fraction)/float64(len(assets))*70)
+		})
+		if err != nil {
+			return fmt.Errorf("не удалось скачать проверенный компонент %s: %w", asset.name, err)
+		}
+	}
+	if !whisperValid {
+		progress("Распаковываю Whisper…", 76)
+		if err := extractZipFiles(filepath.Join(tempDir, "whisper.zip"), toolsStage, func(entry string) bool {
+			clean := strings.ToLower(filepath.ToSlash(entry))
+			if !strings.HasPrefix(clean, "release/") {
+				return false
+			}
+			name := strings.ToLower(filepath.Base(clean))
+			return name == "whisper-cli.exe" || strings.HasSuffix(name, ".dll")
+		}); err != nil {
+			return fmt.Errorf("не удалось распаковать Whisper: %w", err)
+		}
+		if !fileExists(filepath.Join(toolsStage, "whisper-cli.exe")) {
+			return errors.New("проверенный архив Whisper не содержит whisper-cli.exe")
+		}
+		if err := copyDirectoryFiles(toolsStage, filepath.Join(appDir, "tools")); err != nil {
+			return fmt.Errorf("не удалось восстановить Whisper в папке приложения: %w", err)
+		}
+	}
+	if !modelValid {
+		modelDir, err := os.UserConfigDir()
+		if err != nil {
+			return fmt.Errorf("не удалось определить папку модели Whisper: %w", err)
+		}
+		modelDir = filepath.Join(modelDir, "Clipper", "models")
+		if err := copyFile(filepath.Join(tempDir, "ggml-small-q5_1.bin"), filepath.Join(modelDir, "ggml-small-q5_1.bin"), 0o644); err != nil {
+			return fmt.Errorf("не удалось восстановить модель Whisper: %w", err)
+		}
+	}
+	progress("Whisper и модель проверены; можно продолжать обработку.", 100)
+	return nil
+}
+
+func validWhisperExecutable(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.Mode().IsRegular() && info.Size() >= 1<<20
+}
+
+func validInstalledWhisperModel(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil || !info.Mode().IsRegular() {
+		return false
+	}
+	if filepath.Base(path) != "ggml-small-q5_1.bin" {
+		return info.Size() >= 100<<20
+	}
+	if info.Size() != whisperModelSize {
+		return false
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer file.Close()
+	hasher := sha256.New()
+	if _, err := io.Copy(hasher, file); err != nil {
+		return false
+	}
+	return hex.EncodeToString(hasher.Sum(nil)) == whisperModelSHA
 }
 
 func resolveInstallerAssets(ctx context.Context) ([]installerAsset, error) {
@@ -582,6 +798,7 @@ func createClipperShortcuts(installDir string) error {
 		"foreach ($path in $targets) { $shortcut = $shell.CreateShortcut($path); $shortcut.TargetPath = " + quotePowerShell(executable) + "; $shortcut.WorkingDirectory = " + quotePowerShell(installDir) + "; $shortcut.IconLocation = " + quotePowerShell(executable+",0") + "; $shortcut.Save() }\n" +
 		"} catch { Write-Error $_; exit 1 }\n"
 	command := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encodePowerShell(script))
+	hideConsoleWindow(command)
 	output, err := command.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%w: %s", err, strings.TrimSpace(string(output)))

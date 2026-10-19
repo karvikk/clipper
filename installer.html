@@ -54,14 +54,14 @@
   <main>
     <div class="eyebrow">Быстрая установка</div>
     <h1>Clipper — готов к работе</h1>
-    <p class="intro">Установщик скачает Clipper и необходимые программы из официальных источников, проверит контрольные суммы и подготовит ярлыки. После установки не нужен Python или ручная настройка Whisper.</p>
+    <p class="intro">Этот один файл установит Clipper, WebView2 и необходимые программы из официальных источников, проверит контрольные суммы и подготовит ярлыки. После установки не нужен Python или ручная настройка Whisper.</p>
     <section class="card">
       <div class="components">
         <div class="component"><div class="component-icon">01</div><div><div class="component-name">Clipper Studio</div><div class="component-detail">Приложение для Windows x64</div></div></div>
         <div class="component"><div class="component-icon">02</div><div><div class="component-name">Whisper.cpp и модель распознавания</div><div class="component-detail">Автоматические русские субтитры по словам</div></div></div>
         <div class="component"><div class="component-icon">03</div><div><div class="component-name">FFmpeg, yt-dlp и Deno</div><div class="component-detail">Скачивание видео, звук и сборка клипов</div></div></div>
       </div>
-      <div class="size-note">Требуется около 350 МБ загрузки и свободного места. Файлы скачиваются при установке; ключ доступа вводится позже в настройках приложения.</div>
+      <div class="size-note">Нужны интернет и около 350 МБ для загрузки компонентов. Whisper и его модель устанавливаются вместе с программой, а при повреждении автоматически проверяются и восстанавливаются при обработке. Ключ вводится позже в настройках.</div>
       <div id="status" class="status">Готов установить Clipper для текущей учётной записи Windows.</div>
       <div class="progress-track"><div id="progress" class="progress"></div></div>
       <div class="progress-label"><span id="step">Ожидание</span><span id="percent">0%</span></div>
@@ -71,7 +71,7 @@
         <button id="launchButton" class="primary" type="button" hidden>Запустить Clipper</button>
       </div>
     </section>
-    <p class="fine-print">Whisper.cpp, FFmpeg, yt-dlp и Deno загружаются из официальных релизов; модель Whisper — из официального репозитория. Установщик проверяет SHA-256 перед использованием. Ключ, клипы и настройки остаются в профиле Windows и не передаются установщику.</p>
+    <p class="fine-print">Whisper.cpp, FFmpeg, yt-dlp и Deno загружаются из официальных релизов; модель Whisper — из официального репозитория. Установщик проверяет SHA-256, а WebView2 — подлинную подпись Microsoft. Ключ, клипы и настройки остаются в профиле Windows и не передаются установщику.</p>
   </main>
   <script>
     const byId = id => document.getElementById(id);

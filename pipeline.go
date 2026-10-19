@@ -19,6 +19,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -58,6 +59,13 @@ type tools struct {
 	model     string
 }
 
+type videoEncoder struct {
+	name    string
+	options []string
+}
+
+var renderEncoderCache sync.Map
+
 func processVideo(
 	ctx context.Context,
 	request StartRequest,
@@ -66,6 +74,12 @@ func processVideo(
 	progress func(UIEvent),
 	onClip func(string) error,
 ) (int, error) {
+	progress(UIEvent{Type: "progress", Message: "Проверяю Whisper и модель распознавания…"})
+	if err := ensureWhisperComponents(ctx, func(message string, _ float64) {
+		progress(UIEvent{Type: "progress", Message: message})
+	}); err != nil {
+		return 0, fmt.Errorf("не удалось подготовить Whisper: %w", err)
+	}
 	resolved, err := resolveTools()
 	if err != nil {
 		return 0, err
@@ -266,11 +280,11 @@ func resolveTools() (tools, error) {
 		return tools{}, fmt.Errorf("не удалось добавить FFmpeg в PATH для yt-dlp: %w", err)
 	}
 	if resolved.whisper == "" {
-		return tools{}, errors.New("не найден whisper-cli. Установите whisper.cpp и поместите whisper-cli.exe в папку tools рядом с Clipper.")
+		return tools{}, errors.New("не найден whisper-cli. Повторите установку Clipper, чтобы восстановить Whisper.")
 	}
 	resolved.model = findWhisperModel(appDir)
 	if resolved.model == "" {
-		return tools{}, errors.New("не найдена модель Whisper. Запустите ClipperSetup.bat для автоматической установки или укажите её путь через CLIPPER_WHISPER_MODEL.")
+		return tools{}, errors.New("не найдена модель Whisper. Повторите установку Clipper, чтобы восстановить модель.")
 	}
 	return resolved, nil
 }
@@ -332,6 +346,7 @@ func fileExists(path string) bool {
 
 func runCommand(ctx context.Context, directory, executable string, args ...string) ([]byte, error) {
 	command := exec.CommandContext(ctx, executable, args...)
+	hideConsoleWindow(command)
 	command.Dir = directory
 	var stdout, stderr bytes.Buffer
 	command.Stdout = &stdout
@@ -341,7 +356,9 @@ func runCommand(ctx context.Context, directory, executable string, args ...strin
 			return os.ErrProcessDone
 		}
 		if runtime.GOOS == "windows" {
-			_ = exec.Command("taskkill.exe", "/PID", strconv.Itoa(command.Process.Pid), "/T", "/F").Run()
+			kill := exec.Command("taskkill.exe", "/PID", strconv.Itoa(command.Process.Pid), "/T", "/F")
+			hideConsoleWindow(kill)
+			_ = kill.Run()
 		}
 		return command.Process.Kill()
 	}
@@ -486,6 +503,7 @@ func audioClips(ctx context.Context, resolved tools, workDir, url string, durati
 
 func decodeRMS(ctx context.Context, ffmpeg, workDir, path string) ([]float64, error) {
 	command := exec.CommandContext(ctx, ffmpeg, "-i", path, "-ac", "1", "-ar", "8000", "-f", "s16le", "-loglevel", "error", "-")
+	hideConsoleWindow(command)
 	command.Dir = workDir
 	stdout, err := command.StdoutPipe()
 	if err != nil {
@@ -498,7 +516,9 @@ func decodeRMS(ctx context.Context, ffmpeg, workDir, path string) ([]float64, er
 			return os.ErrProcessDone
 		}
 		if runtime.GOOS == "windows" {
-			_ = exec.Command("taskkill.exe", "/PID", strconv.Itoa(command.Process.Pid), "/T", "/F").Run()
+			kill := exec.Command("taskkill.exe", "/PID", strconv.Itoa(command.Process.Pid), "/T", "/F")
+			hideConsoleWindow(kill)
+			_ = kill.Run()
 		}
 		return command.Process.Kill()
 	}
@@ -623,6 +643,7 @@ func transcribe(ctx context.Context, resolved tools, workDir, source string, ind
 		"--model", resolved.model,
 		"--file", audioPath,
 		"--language", "auto",
+		"--threads", strconv.Itoa(processingThreads()),
 		"--output-vtt",
 		"--output-file", base,
 		"--no-prints",
@@ -809,6 +830,10 @@ func formatASSTime(value float64) string {
 }
 
 func renderClip(ctx context.Context, ffmpeg, workDir, source, background string, backgroundStart float64, localBackground bool, assName, output string) error {
+	encoder, err := preferredVideoEncoder(ctx, ffmpeg, workDir)
+	if err != nil {
+		return err
+	}
 	graph := fmt.Sprintf(
 		"[0:v]scale=1080:960:force_original_aspect_ratio=increase,crop=1080:960[top];"+
 			"[1:v]scale=1080:960:force_original_aspect_ratio=increase,crop=1080:960[bottom];"+
@@ -823,19 +848,86 @@ func renderClip(ctx context.Context, ffmpeg, workDir, source, background string,
 	}
 	temporary := strings.TrimSuffix(output, ".mp4") + ".tmp.mp4"
 	args = append(args,
+		"-filter_complex_threads", strconv.Itoa(processingThreads()),
 		"-filter_complex", graph,
-		"-map", "[out]", "-map", "0:a?",
-		"-shortest", "-c:v", "libx264", "-preset", "veryfast", "-crf", "19",
-		"-c:a", "aac", temporary,
+		"-map", "[out]", "-map", "0:a?", "-shortest",
 	)
+	args = append(args, encoder.options...)
+	args = append(args, "-c:a", "aac", temporary)
 	if _, err := runCommand(ctx, workDir, ffmpeg, args...); err != nil {
 		_ = os.Remove(temporary)
-		return fmt.Errorf("ошибка FFmpeg: %w", err)
+		if encoder.name != "libx264" {
+			args = args[:len(args)-len(encoder.options)-3]
+			args = append(args, softwareEncoderOptions()...)
+			args = append(args, "-c:a", "aac", temporary)
+			if _, fallbackErr := runCommand(ctx, workDir, ffmpeg, args...); fallbackErr == nil {
+				encoder = videoEncoder{name: "libx264", options: softwareEncoderOptions()}
+				renderEncoderCache.Store(ffmpeg, encoder)
+			} else {
+				_ = os.Remove(temporary)
+				return fmt.Errorf("аппаратное кодирование завершилось ошибкой (%v); программное кодирование тоже не удалось: %w", err, fallbackErr)
+			}
+		} else {
+			return fmt.Errorf("ошибка FFmpeg: %w", err)
+		}
 	}
 	if err := os.Rename(temporary, output); err != nil {
 		return fmt.Errorf("не удалось сохранить видео: %w", err)
 	}
 	return nil
+}
+
+func preferredVideoEncoder(ctx context.Context, ffmpeg, workDir string) (videoEncoder, error) {
+	if cached, ok := renderEncoderCache.Load(ffmpeg); ok {
+		return cached.(videoEncoder), nil
+	}
+	software := videoEncoder{name: "libx264", options: softwareEncoderOptions()}
+	available, err := runCommand(ctx, workDir, ffmpeg, "-hide_banner", "-encoders")
+	if err != nil {
+		renderEncoderCache.Store(ffmpeg, software)
+		return software, nil
+	}
+	for _, encoder := range []videoEncoder{
+		{name: "h264_nvenc", options: []string{"-c:v", "h264_nvenc", "-preset", "p4", "-cq", "23", "-b:v", "0"}},
+		{name: "h264_qsv", options: []string{"-c:v", "h264_qsv", "-preset", "faster", "-global_quality", "23"}},
+		{name: "h264_amf", options: []string{"-c:v", "h264_amf", "-quality", "speed", "-qp_i", "23", "-qp_p", "23"}},
+	} {
+		if !strings.Contains(string(available), encoder.name) {
+			continue
+		}
+		probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		args := []string{
+			"-hide_banner", "-loglevel", "error",
+			"-f", "lavfi", "-i", "color=c=black:s=64x64:r=1:d=1",
+			"-frames:v", "1", "-an",
+		}
+		args = append(args, encoder.options...)
+		args = append(args, "-f", "null", "-")
+		_, probeErr := runCommand(probeCtx, workDir, ffmpeg, args...)
+		cancel()
+		if probeErr == nil {
+			renderEncoderCache.Store(ffmpeg, encoder)
+			return encoder, nil
+		}
+		if ctx.Err() != nil {
+			return videoEncoder{}, ctx.Err()
+		}
+	}
+	renderEncoderCache.Store(ffmpeg, software)
+	return software, nil
+}
+
+func softwareEncoderOptions() []string {
+	return []string{
+		"-c:v", "libx264",
+		"-preset", "ultrafast",
+		"-crf", "21",
+		"-threads:v", strconv.Itoa(processingThreads()),
+	}
+}
+
+func processingThreads() int {
+	return max(1, min(runtime.NumCPU()/2, 4))
 }
 
 func randomGameplayStart(ctx context.Context, ffprobe, path string, clipDuration float64) (float64, error) {

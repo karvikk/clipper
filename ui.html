@@ -70,7 +70,7 @@
     .nav-item {
       width: 100%; display: flex; align-items: center; gap: 11px; padding: 11px 12px;
       color: #c9c7d0; border: 0; border-radius: 11px; background: transparent;
-      text-align: left; cursor: default;
+      text-align: left; cursor: pointer;
     }
     .nav-item.active { color: #d9ceff; background: rgba(155,123,255,.13); }
     .nav-icon { width: 18px; text-align: center; font-size: 16px; }
@@ -258,6 +258,17 @@
     .diagnostic-state { color: #ff9ca4; font-size: 10px; }
     .diagnostic-state.ok { color: #a8e8c7; }
     .diagnostic-path { max-width: 62%; overflow: hidden; color: #777581; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+    .preset-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+    .preset-card { display: flex; flex-direction: column; min-height: 225px; }
+    .preset-card p, .guide-step p { color: var(--muted); font-size: 12px; line-height: 1.6; }
+    .preset-metrics { display: flex; gap: 8px; margin: 8px 0 18px; flex-wrap: wrap; }
+    .preset-card .button-primary { margin-top: auto; }
+    .guide-list { display: grid; gap: 12px; }
+    .guide-step { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 13px; padding: 16px; border: 1px solid var(--stroke); border-radius: 12px; background: rgba(255,255,255,.02); }
+    .guide-step .step { width: 30px; height: 30px; }
+    .guide-step h3 { margin: 2px 0 0; font-size: 13px; }
+    .guide-step p { margin: 6px 0 0; }
+    .guide-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
     @media (max-width: 940px) {
       main { padding: 26px 24px; }
       .shell { grid-template-columns: 190px 1fr; }
@@ -265,6 +276,7 @@
       .layout { grid-template-columns: 1fr; }
       .status-card { min-height: auto; }
       .settings-grid { grid-template-columns: 1fr; }
+      .preset-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -287,6 +299,8 @@
       <button id="createNav" class="nav-item active" type="button"><span class="nav-icon">✦</span>Создать клипы</button>
       <button id="libraryNav" class="nav-item" type="button"><span class="nav-icon">▤</span>Мои клипы</button>
       <button id="historyNav" class="nav-item" type="button"><span class="nav-icon">◷</span>История</button>
+      <button id="presetsNav" class="nav-item" type="button"><span class="nav-icon">✧</span>Пресеты</button>
+      <button id="guideNav" class="nav-item" type="button"><span class="nav-icon">ⓘ</span>Гид</button>
       <button id="settingsNav" class="nav-item" type="button"><span class="nav-icon">⚙</span>Настройки</button>
       <div class="sidebar-bottom">
         <div class="tip"><strong>Совет</strong><br>Для игрового фона выбери видео с динамичной картинкой — Clipper случайно использует разные его фрагменты.</div>
@@ -418,6 +432,46 @@
           <div id="historyList" class="history-list"><div class="activity-empty">Загружаю историю…</div></div>
         </div>
       </section>
+      <section id="presetsPage" class="page" hidden>
+        <div class="preset-grid">
+          <article class="card preset-card">
+            <div class="card-title"><span class="step">✦</span>Короткие и динамичные</div>
+            <p>Больше коротких роликов — удобно, когда в исходном видео много разных ярких моментов.</p>
+            <div class="preset-metrics"><span class="stat-chip">5 клипов</span><span class="stat-chip">30 секунд</span></div>
+            <button class="button-primary preset-apply" data-count="5" data-duration="30" type="button">Выбрать пресет</button>
+          </article>
+          <article class="card preset-card">
+            <div class="card-title"><span class="step">◈</span>Сбалансированный</div>
+            <p>Универсальная настройка для обычного ролика: несколько клипов средней длины.</p>
+            <div class="preset-metrics"><span class="stat-chip">3 клипа</span><span class="stat-chip">45 секунд</span></div>
+            <button class="button-primary preset-apply" data-count="3" data-duration="45" type="button">Выбрать пресет</button>
+          </article>
+          <article class="card preset-card">
+            <div class="card-title"><span class="step">▶</span>Длинный формат</div>
+            <p>Меньше клипов, зато больше времени на развитие мысли и контекста в каждом видео.</p>
+            <div class="preset-metrics"><span class="stat-chip">2 клипа</span><span class="stat-chip">60 секунд</span></div>
+            <button class="button-primary preset-apply" data-count="2" data-duration="60" type="button">Выбрать пресет</button>
+          </article>
+        </div>
+        <div class="field-note" style="margin:14px 4px">Пресет меняет только количество и длительность. Ссылки на видео и выбранный фон останутся без изменений.</div>
+      </section>
+      <section id="guidePage" class="page" hidden>
+        <section class="card">
+          <div class="page-heading">
+            <div><h2>Как получить хороший результат</h2><p>Короткая памятка по подготовке и работе с Clipper.</p></div>
+          </div>
+          <div class="guide-list">
+            <article class="guide-step"><span class="step">01</span><div><h3>Выбери исходное видео</h3><p>Вставь ссылку на доступное видео. Чёткая речь помогает Whisper точнее распознавать слова и создавать субтитры.</p></div></article>
+            <article class="guide-step"><span class="step">02</span><div><h3>Добавь фон</h3><p>Выбери локальный видеофайл или ссылку. Для ровного монтажа лучше подходит фоновое видео без резких смен ориентации и крупных надписей.</p></div></article>
+            <article class="guide-step"><span class="step">03</span><div><h3>Настрой число и длину клипов</h3><p>Используй пресет как стартовую точку или настрой значения вручную. Если у ключа ограничен остаток, число фактически созданных клипов может быть меньше.</p></div></article>
+            <article class="guide-step"><span class="step">04</span><div><h3>Дождись обработки</h3><p>Видео обрабатывается на этом компьютере. Не закрывай приложение до завершения; готовые ролики появятся в «Моих клипах» и папке результатов.</p></div></article>
+          </div>
+          <div class="guide-actions">
+            <button id="guideCreate" class="button-primary" type="button">Перейти к созданию</button>
+            <button id="guideSettings" class="button-secondary" type="button">Открыть настройки и проверку</button>
+          </div>
+        </section>
+      </section>
       <section id="settingsPage" class="page" hidden>
         <div class="settings-grid">
           <section class="card">
@@ -532,9 +586,11 @@
         create: ["Создать клипы", "Найди яркие моменты и преврати их в вертикальные видео с субтитрами."],
         library: ["Мои клипы", "Готовые ролики и файлы, которые ты уже создал."],
         history: ["История", "Результаты предыдущих запусков Clipper."],
+        presets: ["Пресеты", "Быстрые настройки количества и длительности клипов."],
+        guide: ["Гид", "Подсказки, чтобы подготовить видео и получить хороший результат."],
         settings: ["Настройки", "Ключ доступа, папка результатов и состояние компонентов."]
       };
-      for (const page of ["create", "library", "history", "settings"]) {
+      for (const page of ["create", "library", "history", "presets", "guide", "settings"]) {
         byId(`${page}Page`).hidden = page !== name;
         byId(`${page}Nav`).classList.toggle("active", page === name);
       }
@@ -769,7 +825,23 @@
     byId("createNav").addEventListener("click", () => showPage("create"));
     byId("libraryNav").addEventListener("click", () => showPage("library"));
     byId("historyNav").addEventListener("click", () => showPage("history"));
+    byId("presetsNav").addEventListener("click", () => showPage("presets"));
+    byId("guideNav").addEventListener("click", () => showPage("guide"));
     byId("settingsNav").addEventListener("click", () => showPage("settings"));
+    document.querySelectorAll(".preset-apply").forEach(button => {
+      button.addEventListener("click", () => {
+        byId("clipCount").value = button.dataset.count;
+        byId("clipDuration").value = button.dataset.duration;
+        byId("durationValue").textContent = `${button.dataset.duration} сек`;
+        showPage("create");
+        notify("Пресет применён. Можно изменить ссылки и запустить обработку.", true);
+      });
+    });
+    byId("guideCreate").addEventListener("click", () => showPage("create"));
+    byId("guideSettings").addEventListener("click", () => {
+      showPage("settings");
+      byId("checkTools").click();
+    });
     byId("librarySearch").addEventListener("input", renderLibrary);
     byId("refreshLibrary").addEventListener("click", loadLibrary);
     byId("refreshHistory").addEventListener("click", loadHistory);

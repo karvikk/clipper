@@ -30,11 +30,7 @@ if errorlevel 1 (
   echo Could not prepare the ClipperSetup.exe installer.
   exit /b 1
 )
-copy /y "setup.bat" "release\ClipperSetup.bat" >nul
-if errorlevel 1 (
-  echo Could not prepare the WebView2 bootstrap script.
-  exit /b 1
-)
+if exist "release\ClipperSetup.bat" del /q "release\ClipperSetup.bat"
 copy /y "apply-update.bat" "release\ApplyUpdate.bat" >nul
 if errorlevel 1 (
   echo Could not prepare the update launcher.
@@ -58,8 +54,7 @@ if errorlevel 1 (
 
 echo.
 echo Application: %CD%\release\Clipper.exe
-echo Share these two installer files with a friend:
-echo   %CD%\release\ClipperSetup.bat
+echo Share this single installer with a new user:
 echo   %CD%\release\ClipperSetup.exe
 echo For a friend who already has Clipper, share only:
 echo   %CD%\release\ClipperUpdate.zip

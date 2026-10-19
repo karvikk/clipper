@@ -10,7 +10,7 @@ if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
     throw 'Clipper.exe is missing. Extract all files from ClipperUpdate.zip first.'
 }
 if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
-    throw 'The installed Clipper was not found. Use ClipperSetup.bat for a first installation.'
+    throw 'The installed Clipper was not found. Download and run ClipperSetup.exe for a first installation.'
 }
 
 Write-Host 'Waiting for Clipper to close. Save your work, then close the app.'

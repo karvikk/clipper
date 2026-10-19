@@ -76,7 +76,7 @@ jobs:
           $notes = @"
           ## Что скачать
 
-          - **Устанавливаете Clipper впервые?** Скачайте `ClipperSetup.bat` и `ClipperSetup.exe`. Запустите `.bat` — он проверит WebView2 и откроет установщик.
+          - **Устанавливаете Clipper впервые?** Скачайте и запустите только `ClipperSetup.exe`. Он сам установит WebView2, Clipper, Whisper и остальные компоненты.
           - **Clipper уже установлен и нужно обновление?** Скачайте только `ClipperUpdate.zip`, распакуйте архив и запустите `ApplyUpdate.bat`. Настройки, ключ и клипы сохранятся.
           - `SHA256SUMS.txt` содержит контрольные суммы файлов.
 
@@ -85,7 +85,6 @@ jobs:
           $($generatedNotes.body)
           "@
           gh release create $tag `
-            release/ClipperSetup.bat `
             release/ClipperSetup.exe `
             release/ClipperUpdate.zip `
             release/SHA256SUMS.txt `

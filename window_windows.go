@@ -14,6 +14,13 @@ import (
 
 var windowHandle uintptr
 
+func hideConsoleWindow(command *exec.Cmd) {
+	command.SysProcAttr = &syscall.SysProcAttr{
+		HideWindow:    true,
+		CreationFlags: 0x08000000,
+	}
+}
+
 func applyBorderlessWindow(handle unsafe.Pointer) error {
 	windowHandle = uintptr(handle)
 	getWindowLong := syscall.NewLazyDLL("user32.dll").NewProc("GetWindowLongPtrW")
@@ -24,10 +31,28 @@ func applyBorderlessWindow(handle unsafe.Pointer) error {
 	if style == 0 && callErr != syscall.Errno(0) {
 		return fmt.Errorf("не удалось прочитать стиль окна: %w", callErr)
 	}
-	const windowCaption = 0x00C00000
+	const (
+		windowCaption    = 0x00C00000
+		windowThickFrame = 0x00040000
+		dwmwaBorderColor = 34
+		dwmwaColorNone   = 0xFFFFFFFE
+	)
 	previous, _, callErr := setWindowLong.Call(windowHandle, styleIndex, style&^windowCaption)
 	if previous == 0 && callErr != syscall.Errno(0) {
 		return fmt.Errorf("не удалось убрать системную рамку: %w", callErr)
+	}
+	borderColor := uint32(dwmwaColorNone)
+	borderResult, _, _ := syscall.NewLazyDLL("dwmapi.dll").NewProc("DwmSetWindowAttribute").Call(
+		windowHandle,
+		dwmwaBorderColor,
+		uintptr(unsafe.Pointer(&borderColor)),
+		unsafe.Sizeof(borderColor),
+	)
+	if int32(borderResult) != 0 {
+		previous, _, callErr = setWindowLong.Call(windowHandle, styleIndex, style&^windowCaption&^windowThickFrame)
+		if previous == 0 && callErr != syscall.Errno(0) {
+			return fmt.Errorf("не удалось убрать светлую рамку окна: %w", callErr)
+		}
 	}
 	const frameChanged = 0x0020
 	const noMoveNoSizeNoZOrder = 0x0001 | 0x0002 | 0x0004
